@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}casectl &mdash; Dashboard{% endblock %}
+
+{% set active_nav = 'overview' %}
+
+{% block content %}
+<div class="dashboard">
+
+  <!-- Hero: CPU Temperature -->
+  <section class="hero-temp" aria-label="CPU temperature">
+    <div class="hero-temp-value
+      {%- if cpu_temp < 50 %} temp-green
+      {%- elif cpu_temp < 70 %} temp-amber
+      {%- else %} temp-red
+      {%- endif %}">
+      <span class="hero-number">{{ "%.1f"|format(cpu_temp) }}</span>
+      <span class="hero-unit">&deg;C</span>
+    </div>
+    <p class="hero-label">CPU Temperature</p>
+  </section>
+
+  <!-- Card grid -->
+  <div class="card-grid">
+
+    <!-- System Metrics Card -->
+    <section class="card" id="monitor-card" aria-label="System metrics">
+      <div class="card-header">
+        <h2 class="card-title">System Metrics</h2>
+        <span class="card-badge">Live</span>
+      </div>
+      <div id="monitor-partial"
+           hx-get="/w/monitor"
+           hx-trigger="every 2s"
+           hx-swap="innerHTML"
+           role="region"
+           aria-live="polite">
+        {% include "partials/monitor.html" %}
+      </div>
+    </section>
+
+    <!-- Fan Control Card -->
+    <section class="card" id="fan-card" aria-label="Fan control">
+      <div class="card-header">
+        <h2 class="card-title">Fan Control</h2>
+        <span class="card-badge">Live</span>
+      </div>
+      <div id="fan-partial"
+           hx-get="/w/fan"
+           hx-trigger="every 2s"
+           hx-swap="innerHTML"
+           role="region"
+           aria-live="polite">
+        {% include "partials/fan.html" %}
+      </div>
+    </section>
+
+    <!-- LED Control Card -->
+    <section class="card" id="led-card" aria-label="LED control">
+      <div class="card-header">
+        <h2 class="card-title">LED Control</h2>
+        <span class="card-badge">Live</span>
+      </div>
+      <div id="led-partial"
+           hx-get="/w/led"
+           hx-trigger="every 5s"
+           hx-swap="innerHTML"
+           role="region"
+           aria-live="polite">
+        {% include "partials/led.html" %}
+      </div>
+    </section>
+
+    <!-- OLED Config Card -->
+    <section class="card" id="oled-card" aria-label="OLED display">
+      <div class="card-header">
+        <h2 class="card-title">OLED Display</h2>
+        <span class="card-badge">Live</span>
+      </div>
+      <div id="oled-partial"
+           hx-get="/w/oled"
+           hx-trigger="every 5s"
+           hx-swap="innerHTML"
+           role="region"
+           aria-live="polite">
+        {% include "partials/oled.html" %}
+      </div>
+    </section>
+
+  </div><!-- /.card-grid -->
+
+</div><!-- /.dashboard -->
+{% endblock %}

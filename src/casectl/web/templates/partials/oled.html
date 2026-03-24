@@ -1,0 +1,69 @@
+<!-- OLED Display HTMX Partial -->
+<div class="oled-partial">
+
+  <!-- Mini OLED preview -->
+  <div class="oled-preview-container">
+    <div class="oled-preview" aria-label="OLED display preview">
+      {% if oled_screen_names %}
+        {% set current_name = oled_screen_names[oled_current_screen] | default("clock") %}
+        {% if current_name == "clock" %}
+        <div class="oled-text">
+          <span class="oled-line oled-line--small">Screen: Clock</span>
+          <span class="oled-line oled-line--large">12:34:56</span>
+          <span class="oled-line oled-line--small">2026-03-24</span>
+        </div>
+        {% elif current_name == "metrics" %}
+        <div class="oled-text">
+          <span class="oled-line oled-line--small">Screen: Metrics</span>
+          <span class="oled-line">CPU ████░░ 68%</span>
+          <span class="oled-line">MEM ███░░░ 52%</span>
+          <span class="oled-line">DSK ██░░░░ 34%</span>
+        </div>
+        {% elif current_name == "temperature" %}
+        <div class="oled-text">
+          <span class="oled-line oled-line--small">Screen: Temps</span>
+          <span class="oled-line oled-line--large">CPU: --.-&deg;C</span>
+          <span class="oled-line">Case: --.-&deg;C</span>
+        </div>
+        {% elif current_name == "fan_duty" %}
+        <div class="oled-text">
+          <span class="oled-line oled-line--small">Screen: Fan Duty</span>
+          <span class="oled-line">Fan 1: --.-%</span>
+          <span class="oled-line">Fan 2: --.-%</span>
+          <span class="oled-line">Fan 3: --.-%</span>
+        </div>
+        {% else %}
+        <div class="oled-text">
+          <span class="oled-line oled-line--small">{{ current_name }}</span>
+        </div>
+        {% endif %}
+      {% else %}
+        <div class="oled-text">
+          <span class="oled-line oled-line--small">No screens</span>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Screen toggle buttons -->
+  <div class="oled-screens" role="group" aria-label="OLED screen toggles">
+    {% set screen_labels = {"clock": "Clock", "metrics": "Metrics", "temperature": "Temps", "fan_duty": "Fan Duty"} %}
+    {% for name in oled_screen_names %}
+      {% set is_enabled = oled_screens_enabled[loop.index0] | default(true) %}
+      <button type="button"
+              class="btn btn--toggle{% if is_enabled %} btn--active{% endif %}{% if loop.index0 == oled_current_screen %} btn--current{% endif %}"
+              hx-post="/api/plugins/oled-display/screen"
+              hx-vals='{"index": {{ loop.index0 }}, "enabled": {{ "false" if is_enabled else "true" }}}'
+              hx-swap="none"
+              aria-pressed="{{ 'true' if is_enabled else 'false' }}"
+              title="{{ 'Disable' if is_enabled else 'Enable' }} {{ screen_labels.get(name, name) }} screen">
+        <span class="toggle-indicator{% if is_enabled %} toggle-indicator--on{% endif %}" aria-hidden="true"></span>
+        {{ screen_labels.get(name, name) }}
+        {% if loop.index0 == oled_current_screen %}
+        <span class="screen-current-marker" aria-label="currently displayed" title="Currently displayed">&bull;</span>
+        {% endif %}
+      </button>
+    {% endfor %}
+  </div>
+
+</div>

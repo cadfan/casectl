@@ -1,0 +1,76 @@
+<!-- LED Control HTMX Partial -->
+<div class="led-partial">
+
+  <!-- Current mode badge -->
+  <div class="mode-display">
+    <span class="mode-label">Mode:</span>
+    <span class="mode-badge">{{ led_mode | replace("_", " ") | title }}</span>
+  </div>
+
+  <!-- LED preview strip -->
+  <div class="led-preview-container">
+    {% if led_mode == 'rainbow' %}
+    <div class="led-strip led-strip--rainbow" aria-label="LED preview: rainbow animation">
+    </div>
+    {% elif led_mode == 'breathing' %}
+    <div class="led-strip led-strip--breathing" aria-label="LED preview: breathing animation"
+         style="--led-r: {{ led_color.red }}; --led-g: {{ led_color.green }}; --led-b: {{ led_color.blue }}">
+    </div>
+    {% elif led_mode == 'manual' or led_mode == 'custom' %}
+    <div class="led-strip led-strip--solid" aria-label="LED preview: solid colour"
+         style="background: rgb({{ led_color.red }}, {{ led_color.green }}, {{ led_color.blue }})">
+    </div>
+    {% elif led_mode == 'follow_temp' %}
+    <div class="led-strip led-strip--follow-temp" aria-label="LED preview: temperature following">
+    </div>
+    {% else %}
+    <div class="led-strip led-strip--off" aria-label="LED preview: off">
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Mode buttons -->
+  <div class="control-buttons" role="group" aria-label="LED mode controls">
+    <button type="button"
+            class="btn btn--control{% if led_mode == 'rainbow' %} btn--active{% endif %}"
+            hx-post="/api/plugins/led-control/mode"
+            hx-vals='{"mode": 0}'
+            hx-swap="none"
+            aria-pressed="{{ 'true' if led_mode == 'rainbow' else 'false' }}">
+      Rainbow
+    </button>
+    <button type="button"
+            class="btn btn--control{% if led_mode == 'breathing' %} btn--active{% endif %}"
+            hx-post="/api/plugins/led-control/mode"
+            hx-vals='{"mode": 1}'
+            hx-swap="none"
+            aria-pressed="{{ 'true' if led_mode == 'breathing' else 'false' }}">
+      Breathing
+    </button>
+    <button type="button"
+            class="btn btn--control{% if led_mode == 'follow_temp' %} btn--active{% endif %}"
+            hx-post="/api/plugins/led-control/mode"
+            hx-vals='{"mode": 2}'
+            hx-swap="none"
+            aria-pressed="{{ 'true' if led_mode == 'follow_temp' else 'false' }}">
+      Follow Temp
+    </button>
+    <button type="button"
+            class="btn btn--control{% if led_mode == 'manual' %} btn--active{% endif %}"
+            hx-post="/api/plugins/led-control/mode"
+            hx-vals='{"mode": 3}'
+            hx-swap="none"
+            aria-pressed="{{ 'true' if led_mode == 'manual' else 'false' }}">
+      Manual
+    </button>
+    <button type="button"
+            class="btn btn--control{% if led_mode == 'off' %} btn--active{% endif %}"
+            hx-post="/api/plugins/led-control/mode"
+            hx-vals='{"mode": 5}'
+            hx-swap="none"
+            aria-pressed="{{ 'true' if led_mode == 'off' else 'false' }}">
+      Off
+    </button>
+  </div>
+
+</div>

@@ -1,0 +1,1121 @@
+/* ==========================================================================
+   casectl Web Dashboard — Complete Stylesheet
+   ==========================================================================
+   Design tokens, layout, components, and responsive rules for the HTMX-driven
+   dashboard served by the FastAPI daemon.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Custom Properties (Design Tokens)
+   -------------------------------------------------------------------------- */
+
+:root {
+  /* Colour palette — dark theme */
+  --bg-primary: #1a1a2e;
+  --bg-secondary: #0f0f23;
+  --bg-card: #16213e;
+  --bg-card-hover: #1a2744;
+  --bg-input: #0d1b2a;
+
+  --text-primary: #e0e0e0;
+  --text-secondary: #a0a0b0;
+  --text-muted: #6a6a7a;
+
+  --accent: #4fc3f7;
+  --accent-hover: #29b6f6;
+  --accent-dim: rgba(79, 195, 247, 0.15);
+
+  --success: #81c784;
+  --success-dim: rgba(129, 199, 132, 0.15);
+  --warning: #ffb74d;
+  --warning-dim: rgba(255, 183, 77, 0.15);
+  --error: #ef5350;
+  --error-dim: rgba(239, 83, 80, 0.15);
+
+  --border: #2a2a4a;
+  --border-light: #3a3a5a;
+
+  /* Typography */
+  --font-sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+
+  --fs-xs: 0.75rem;    /* 12px */
+  --fs-sm: 0.8125rem;  /* 13px */
+  --fs-base: 0.9375rem; /* 15px */
+  --fs-md: 1rem;       /* 16px */
+  --fs-lg: 1.25rem;    /* 20px */
+  --fs-xl: 1.5rem;     /* 24px */
+  --fs-2xl: 2rem;      /* 32px */
+  --fs-hero: 3.5rem;   /* 56px */
+
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+
+  --lh-tight: 1.2;
+  --lh-normal: 1.5;
+  --lh-relaxed: 1.7;
+
+  /* Spacing */
+  --space-1: 0.25rem;  /* 4px */
+  --space-2: 0.5rem;   /* 8px */
+  --space-3: 0.75rem;  /* 12px */
+  --space-4: 1rem;     /* 16px */
+  --space-5: 1.25rem;  /* 20px */
+  --space-6: 1.5rem;   /* 24px */
+  --space-8: 2rem;     /* 32px */
+  --space-10: 2.5rem;  /* 40px */
+  --space-12: 3rem;    /* 48px */
+
+  /* Radii */
+  --radius-sm: 4px;
+  --radius-btn: 4px;
+  --radius-card: 8px;
+  --radius-lg: 12px;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-card-hover: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-btn: 0 1px 3px rgba(0, 0, 0, 0.2);
+
+  /* Transitions */
+  --transition-fast: 120ms ease;
+  --transition-base: 200ms ease;
+  --transition-slow: 350ms ease;
+
+  /* Layout */
+  --max-width: 1200px;
+  --header-height: 56px;
+  --nav-height: 48px;
+  --touch-min: 44px;
+}
+
+
+/* --------------------------------------------------------------------------
+   2. Reset & Base
+   -------------------------------------------------------------------------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--fs-base);
+  font-weight: var(--fw-regular);
+  line-height: var(--lh-normal);
+  color: var(--text-primary);
+  background-color: var(--bg-secondary);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+a:hover {
+  color: var(--accent-hover);
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+/* --------------------------------------------------------------------------
+   3. Skip Link (Accessibility)
+   -------------------------------------------------------------------------- */
+
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: var(--space-4);
+  z-index: 1000;
+  padding: var(--space-2) var(--space-4);
+  background: var(--accent);
+  color: var(--bg-primary);
+  font-weight: var(--fw-semibold);
+  border-radius: var(--radius-btn);
+  transition: top var(--transition-fast);
+}
+
+.skip-link:focus {
+  top: var(--space-2);
+}
+
+/* --------------------------------------------------------------------------
+   4. Header
+   -------------------------------------------------------------------------- */
+
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  height: var(--header-height);
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border);
+}
+
+.header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 0 var(--space-4);
+  height: 100%;
+}
+
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.logo {
+  font-size: var(--fs-xl);
+  color: var(--accent);
+}
+
+.logo-text {
+  font-family: var(--font-mono);
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-bold);
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+}
+
+.header-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.hostname {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}
+
+.status-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+
+.status-dot--healthy {
+  background: var(--success);
+  box-shadow: 0 0 6px var(--success);
+}
+
+.status-dot--degraded {
+  background: var(--warning);
+  box-shadow: 0 0 6px var(--warning);
+}
+
+.status-dot--error {
+  background: var(--error);
+  box-shadow: 0 0 6px var(--error);
+  animation: pulse-error 2s ease-in-out infinite;
+}
+
+@keyframes pulse-error {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* --------------------------------------------------------------------------
+   5. Navigation
+   -------------------------------------------------------------------------- */
+
+.site-nav {
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.site-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.nav-list {
+  display: flex;
+  align-items: center;
+  list-style: none;
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 0 var(--space-4);
+  gap: var(--space-1);
+}
+
+.nav-item {
+  flex-shrink: 0;
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch-min);
+  padding: var(--space-2) var(--space-4);
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  border-bottom: 2px solid transparent;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+  white-space: nowrap;
+}
+
+.nav-link:hover {
+  color: var(--text-primary);
+}
+
+.nav-link--active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.nav-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: var(--radius-sm);
+}
+
+/* --------------------------------------------------------------------------
+   6. Main Content
+   -------------------------------------------------------------------------- */
+
+.main-content {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-4);
+}
+
+/* --------------------------------------------------------------------------
+   7. Dashboard & Hero Temperature
+   -------------------------------------------------------------------------- */
+
+.dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.hero-temp {
+  text-align: center;
+  padding: var(--space-8) var(--space-4);
+}
+
+.hero-temp-value {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: var(--space-1);
+}
+
+.hero-number {
+  font-family: var(--font-mono);
+  font-size: var(--fs-hero);
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-tight);
+}
+
+.hero-unit {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-medium);
+  opacity: 0.7;
+}
+
+.hero-label {
+  margin-top: var(--space-2);
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+/* Temperature colour classes */
+.temp-green { color: var(--success); }
+.temp-amber { color: var(--warning); }
+.temp-red   { color: var(--error); }
+
+/* --------------------------------------------------------------------------
+   8. Card Grid
+   -------------------------------------------------------------------------- */
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-5);
+}
+
+@media (max-width: 768px) {
+  .card-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   9. Card Component
+   -------------------------------------------------------------------------- */
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  transition: box-shadow var(--transition-base), border-color var(--transition-base);
+}
+
+.card:hover {
+  box-shadow: var(--shadow-card-hover);
+  border-color: var(--border-light);
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border);
+}
+
+.card-title {
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+}
+
+.card-badge {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  color: var(--accent);
+  background: var(--accent-dim);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-full);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Card body (the HTMX partial container) */
+#monitor-partial,
+#fan-partial,
+#led-partial,
+#oled-partial {
+  padding: var(--space-4) var(--space-5);
+}
+
+/* --------------------------------------------------------------------------
+   10. Monitor Partial Styles
+   -------------------------------------------------------------------------- */
+
+.monitor-partial {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.metric-hero {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.metric-hero-value {
+  font-family: var(--font-mono);
+  font-size: var(--fs-2xl);
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-tight);
+}
+
+.metric-hero-label {
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}
+
+/* --------------------------------------------------------------------------
+   11. Progress Bars
+   -------------------------------------------------------------------------- */
+
+.metric-bars {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.metric-row {
+  display: grid;
+  grid-template-columns: 3rem 1fr 3.5rem;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.metric-label {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.metric-value {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  color: var(--text-primary);
+  text-align: right;
+}
+
+.progress-bar {
+  position: relative;
+  height: 8px;
+  background: var(--bg-input);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.progress-bar--small {
+  height: 4px;
+}
+
+.progress-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width var(--transition-slow);
+  min-width: 0;
+}
+
+.progress-fill--normal {
+  background: var(--accent);
+}
+
+.progress-fill--warning {
+  background: var(--warning);
+}
+
+.progress-fill--danger {
+  background: var(--error);
+}
+
+.progress-fill--accent {
+  background: var(--accent);
+}
+
+/* --------------------------------------------------------------------------
+   12. Metric Details
+   -------------------------------------------------------------------------- */
+
+.metric-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.metric-detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.metric-detail-label {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.metric-detail-value {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  color: var(--text-primary);
+}
+
+/* --------------------------------------------------------------------------
+   13. Mode Display
+   -------------------------------------------------------------------------- */
+
+.mode-display {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.mode-label {
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}
+
+.mode-badge {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--accent);
+  background: var(--accent-dim);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+}
+
+/* --------------------------------------------------------------------------
+   14. Fan Partial Styles
+   -------------------------------------------------------------------------- */
+
+.fan-partial {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.fan-channels {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.fan-channel {
+  padding: var(--space-3);
+  background: var(--bg-input);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+
+.fan-channel-header {
+  margin-bottom: var(--space-2);
+}
+
+.fan-channel-name {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+}
+
+.fan-channel-stats {
+  display: flex;
+  gap: var(--space-6);
+  margin-bottom: var(--space-2);
+}
+
+.fan-stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.fan-stat-label {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.fan-stat-value {
+  font-family: var(--font-mono);
+  font-size: var(--fs-base);
+  font-weight: var(--fw-semibold);
+  color: var(--text-primary);
+}
+
+/* --------------------------------------------------------------------------
+   15. Buttons
+   -------------------------------------------------------------------------- */
+
+.control-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch-min);
+  padding: var(--space-2) var(--space-4);
+  font-family: var(--font-sans);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  color: var(--text-secondary);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-btn);
+  cursor: pointer;
+  box-shadow: var(--shadow-btn);
+  transition:
+    color var(--transition-fast),
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
+  user-select: none;
+  white-space: nowrap;
+}
+
+.btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-card-hover);
+  border-color: var(--border-light);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.btn:active {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+
+.btn--control {
+  flex: 1 1 auto;
+  min-width: 80px;
+}
+
+.btn--active {
+  color: var(--accent);
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+
+.btn--active:hover {
+  background: rgba(79, 195, 247, 0.25);
+}
+
+/* Toggle button variant */
+.btn--toggle {
+  gap: var(--space-2);
+  position: relative;
+}
+
+.btn--current {
+  border-color: var(--accent);
+}
+
+.toggle-indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--text-muted);
+  transition: background var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.toggle-indicator--on {
+  background: var(--success);
+  box-shadow: 0 0 4px var(--success);
+}
+
+.screen-current-marker {
+  color: var(--accent);
+  font-size: var(--fs-lg);
+  line-height: 1;
+}
+
+/* Manual mode hint */
+.manual-controls {
+  padding: var(--space-3);
+  background: var(--bg-input);
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--border-light);
+}
+
+.manual-hint {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* --------------------------------------------------------------------------
+   16. LED Preview
+   -------------------------------------------------------------------------- */
+
+.led-partial {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.led-preview-container {
+  padding: var(--space-2) 0;
+}
+
+.led-strip {
+  height: 16px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+/* Rainbow animation */
+.led-strip--rainbow {
+  background: linear-gradient(
+    90deg,
+    #ff0000,
+    #ff8800,
+    #ffff00,
+    #00ff00,
+    #0088ff,
+    #8800ff,
+    #ff0088,
+    #ff0000
+  );
+  background-size: 200% 100%;
+  animation: rainbow-scroll 3s linear infinite;
+}
+
+@keyframes rainbow-scroll {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+/* Breathing animation */
+.led-strip--breathing {
+  background: rgb(
+    var(--led-r, 79),
+    var(--led-g, 195),
+    var(--led-b, 247)
+  );
+  animation: breathing-pulse 3s ease-in-out infinite;
+}
+
+@keyframes breathing-pulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+
+/* Solid colour */
+.led-strip--solid {
+  /* Background set inline via style attribute */
+}
+
+/* Follow-temp gradient */
+.led-strip--follow-temp {
+  background: linear-gradient(90deg, #4fc3f7, #81c784, #ffb74d, #ef5350);
+  background-size: 200% 100%;
+  animation: temp-shift 6s ease-in-out infinite alternate;
+}
+
+@keyframes temp-shift {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 100% 50%; }
+}
+
+/* Off state */
+.led-strip--off {
+  background: var(--bg-input);
+}
+
+/* --------------------------------------------------------------------------
+   17. OLED Preview
+   -------------------------------------------------------------------------- */
+
+.oled-partial {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.oled-preview-container {
+  display: flex;
+  justify-content: center;
+}
+
+.oled-preview {
+  width: 256px;
+  height: 128px;
+  background: #000000;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  /* Scaled 2x from the real 128x64 OLED */
+}
+
+.oled-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2);
+  width: 100%;
+}
+
+.oled-line {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: #ffffff;
+  line-height: var(--lh-normal);
+  white-space: pre;
+}
+
+.oled-line--small {
+  font-size: 10px;
+  color: #808080;
+}
+
+.oled-line--large {
+  font-size: var(--fs-md);
+  font-weight: var(--fw-bold);
+}
+
+.oled-screens {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* --------------------------------------------------------------------------
+   18. Footer
+   -------------------------------------------------------------------------- */
+
+.site-footer {
+  max-width: var(--max-width);
+  margin: var(--space-12) auto var(--space-6);
+  padding: 0 var(--space-4);
+  text-align: center;
+}
+
+.footer-text {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+
+/* --------------------------------------------------------------------------
+   19. HTMX Loading States
+   -------------------------------------------------------------------------- */
+
+.htmx-request {
+  opacity: 0.6;
+  transition: opacity var(--transition-base);
+}
+
+.htmx-settling {
+  opacity: 1;
+}
+
+/* Indicator for in-flight requests */
+.htmx-indicator {
+  display: none;
+}
+
+.htmx-request .htmx-indicator,
+.htmx-request.htmx-indicator {
+  display: inline-block;
+}
+
+/* --------------------------------------------------------------------------
+   20. Responsive — Tablet (max-width: 1024px)
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 1024px) {
+  :root {
+    --fs-hero: 2.75rem;
+  }
+
+  .card-grid {
+    gap: var(--space-4);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   21. Responsive — Mobile (max-width: 768px)
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 768px) {
+  :root {
+    --fs-hero: 2.25rem;
+    --header-height: 48px;
+  }
+
+  .card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .header-inner {
+    padding: 0 var(--space-3);
+  }
+
+  .main-content {
+    padding: var(--space-4) var(--space-3);
+  }
+
+  .nav-list {
+    padding: 0 var(--space-3);
+  }
+
+  .hero-temp {
+    padding: var(--space-6) var(--space-3);
+  }
+
+  #monitor-partial,
+  #fan-partial,
+  #led-partial,
+  #oled-partial {
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .metric-row {
+    grid-template-columns: 2.5rem 1fr 3rem;
+    gap: var(--space-2);
+  }
+
+  .metric-details {
+    grid-template-columns: 1fr;
+  }
+
+  .fan-channel-stats {
+    gap: var(--space-4);
+  }
+
+  .control-buttons {
+    gap: var(--space-2);
+  }
+
+  .btn--control {
+    min-width: 0;
+    flex: 1 1 calc(50% - var(--space-2));
+  }
+
+  .oled-preview {
+    width: 192px;
+    height: 96px;
+  }
+
+  .oled-line {
+    font-size: 10px;
+  }
+
+  .oled-line--large {
+    font-size: var(--fs-sm);
+  }
+
+  .oled-line--small {
+    font-size: 9px;
+  }
+
+  .oled-screens {
+    flex-direction: column;
+  }
+
+  .oled-screens .btn--toggle {
+    width: 100%;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   22. Responsive — Small Mobile (max-width: 480px)
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 480px) {
+  :root {
+    --fs-hero: 1.875rem;
+  }
+
+  .logo-text {
+    font-size: var(--fs-md);
+  }
+
+  .hostname {
+    display: none;
+  }
+
+  .btn--control {
+    flex: 1 1 100%;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   23. Focus & Keyboard Accessibility
+   -------------------------------------------------------------------------- */
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Remove focus ring for mouse users */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Ensure touch targets are at least 44px */
+button,
+[role="button"],
+a.nav-link,
+a.btn {
+  min-height: var(--touch-min);
+}
+
+/* --------------------------------------------------------------------------
+   24. Reduced Motion
+   -------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   25. Print Styles
+   -------------------------------------------------------------------------- */
+
+@media print {
+  .site-header,
+  .site-nav,
+  .site-footer,
+  .control-buttons,
+  .card-badge {
+    display: none;
+  }
+
+  body {
+    background: #fff;
+    color: #000;
+  }
+
+  .card {
+    border: 1px solid #ccc;
+    box-shadow: none;
+    break-inside: avoid;
+  }
+}

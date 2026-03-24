@@ -1,0 +1,85 @@
+<!-- Fan Control HTMX Partial -->
+<div class="fan-partial">
+
+  <!-- Current mode badge -->
+  <div class="mode-display">
+    <span class="mode-label">Mode:</span>
+    <span class="mode-badge">{{ fan_mode | replace("_", " ") | title }}</span>
+  </div>
+
+  <!-- Fan channels -->
+  <div class="fan-channels">
+    {% for i in range(3) %}
+    <div class="fan-channel">
+      <div class="fan-channel-header">
+        <span class="fan-channel-name">Fan {{ i + 1 }}</span>
+      </div>
+      <div class="fan-channel-stats">
+        <div class="fan-stat">
+          <span class="fan-stat-label">Duty</span>
+          <span class="fan-stat-value">
+            {%- set duty_pct = ((fan_duty[i] | default(0)) / 255 * 100) | round | int -%}
+            {{ duty_pct }}%
+          </span>
+        </div>
+        <div class="fan-stat">
+          <span class="fan-stat-label">RPM</span>
+          <span class="fan-stat-value mono">{{ fan_rpm[i] | default(0) }}</span>
+        </div>
+      </div>
+      <div class="progress-bar progress-bar--small" role="progressbar"
+           aria-valuenow="{{ duty_pct }}"
+           aria-valuemin="0" aria-valuemax="100"
+           aria-label="Fan {{ i + 1 }} duty {{ duty_pct }} percent">
+        <div class="progress-fill progress-fill--accent"
+             style="width: {{ duty_pct }}%">
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Mode buttons -->
+  <div class="control-buttons" role="group" aria-label="Fan mode controls">
+    <button type="button"
+            class="btn btn--control{% if fan_mode == 'follow_temp' %} btn--active{% endif %}"
+            hx-post="/api/plugins/fan-control/mode"
+            hx-vals='{"mode": 0}'
+            hx-swap="none"
+            aria-pressed="{{ 'true' if fan_mode == 'follow_temp' else 'false' }}">
+      Auto
+    </button>
+    <button type="button"
+            class="btn btn--control{% if fan_mode == 'follow_rpi' %} btn--active{% endif %}"
+            hx-post="/api/plugins/fan-control/mode"
+            hx-vals='{"mode": 1}'
+            hx-swap="none"
+            aria-pressed="{{ 'true' if fan_mode == 'follow_rpi' else 'false' }}">
+      Follow RPi
+    </button>
+    <button type="button"
+            class="btn btn--control{% if fan_mode == 'manual' %} btn--active{% endif %}"
+            hx-post="/api/plugins/fan-control/mode"
+            hx-vals='{"mode": 2}'
+            hx-swap="none"
+            aria-pressed="{{ 'true' if fan_mode == 'manual' else 'false' }}">
+      Manual
+    </button>
+    <button type="button"
+            class="btn btn--control{% if fan_mode == 'off' %} btn--active{% endif %}"
+            hx-post="/api/plugins/fan-control/mode"
+            hx-vals='{"mode": 4}'
+            hx-swap="none"
+            aria-pressed="{{ 'true' if fan_mode == 'off' else 'false' }}">
+      Off
+    </button>
+  </div>
+
+  <!-- Manual duty slider placeholder (shown only in manual mode) -->
+  {% if fan_mode == 'manual' %}
+  <div class="manual-controls">
+    <p class="manual-hint">Manual duty control via slider &mdash; coming soon.</p>
+  </div>
+  {% endif %}
+
+</div>

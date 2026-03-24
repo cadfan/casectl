@@ -1,0 +1,84 @@
+<!-- System Monitor HTMX Partial -->
+<div class="monitor-partial">
+
+  <!-- CPU Temperature hero -->
+  <div class="metric-hero">
+    <span class="metric-hero-value
+      {%- if cpu_temp < 50 %} temp-green
+      {%- elif cpu_temp < 70 %} temp-amber
+      {%- else %} temp-red
+      {%- endif %}">
+      {{ "%.1f"|format(cpu_temp) }}&deg;C
+    </span>
+    <span class="metric-hero-label">CPU Temp</span>
+  </div>
+
+  <!-- Progress bars for CPU, Memory, Disk -->
+  <div class="metric-bars">
+
+    <div class="metric-row">
+      <span class="metric-label">CPU</span>
+      <div class="progress-bar" role="progressbar"
+           aria-valuenow="{{ cpu_percent|round|int }}"
+           aria-valuemin="0" aria-valuemax="100"
+           aria-label="CPU usage {{ cpu_percent|round|int }} percent">
+        <div class="progress-fill
+          {%- if cpu_percent < 60 %} progress-fill--normal
+          {%- elif cpu_percent < 85 %} progress-fill--warning
+          {%- else %} progress-fill--danger
+          {%- endif %}"
+          style="width: {{ cpu_percent|round|int }}%">
+        </div>
+      </div>
+      <span class="metric-value">{{ "%.1f"|format(cpu_percent) }}%</span>
+    </div>
+
+    <div class="metric-row">
+      <span class="metric-label">MEM</span>
+      <div class="progress-bar" role="progressbar"
+           aria-valuenow="{{ memory_percent|round|int }}"
+           aria-valuemin="0" aria-valuemax="100"
+           aria-label="Memory usage {{ memory_percent|round|int }} percent">
+        <div class="progress-fill
+          {%- if memory_percent < 60 %} progress-fill--normal
+          {%- elif memory_percent < 85 %} progress-fill--warning
+          {%- else %} progress-fill--danger
+          {%- endif %}"
+          style="width: {{ memory_percent|round|int }}%">
+        </div>
+      </div>
+      <span class="metric-value">{{ "%.1f"|format(memory_percent) }}%</span>
+    </div>
+
+    <div class="metric-row">
+      <span class="metric-label">DISK</span>
+      <div class="progress-bar" role="progressbar"
+           aria-valuenow="{{ disk_percent|round|int }}"
+           aria-valuemin="0" aria-valuemax="100"
+           aria-label="Disk usage {{ disk_percent|round|int }} percent">
+        <div class="progress-fill
+          {%- if disk_percent < 60 %} progress-fill--normal
+          {%- elif disk_percent < 85 %} progress-fill--warning
+          {%- else %} progress-fill--danger
+          {%- endif %}"
+          style="width: {{ disk_percent|round|int }}%">
+        </div>
+      </div>
+      <span class="metric-value">{{ "%.1f"|format(disk_percent) }}%</span>
+    </div>
+
+  </div>
+
+  <!-- Secondary info -->
+  <div class="metric-details">
+    <div class="metric-detail-item">
+      <span class="metric-detail-label">Case Temp</span>
+      <span class="metric-detail-value">{{ "%.1f"|format(case_temp) }}&deg;C</span>
+    </div>
+    <div class="metric-detail-item">
+      <span class="metric-detail-label">IP Address</span>
+      <span class="metric-detail-value mono">{{ ip_address if ip_address else "N/A" }}</span>
+    </div>
+  </div>
+
+</div>

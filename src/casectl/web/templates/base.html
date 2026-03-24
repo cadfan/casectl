@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}casectl{% endblock %}</title>
+
+  <!-- Fonts: JetBrains Mono (mono) + IBM Plex Sans (sans) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+  <!-- HTMX -->
+  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+
+  <!-- App CSS -->
+  <link rel="stylesheet" href="/static/style.css">
+
+  {% block head_extra %}{% endblock %}
+</head>
+<body>
+  <!-- Skip link for keyboard users -->
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+
+  <!-- Header -->
+  <header class="site-header" role="banner">
+    <div class="header-inner">
+      <div class="header-brand">
+        <span class="logo" aria-hidden="true">&#9638;</span>
+        <h1 class="logo-text">casectl</h1>
+      </div>
+      <div class="header-status">
+        <span class="hostname">{{ hostname | default("casectl") }}</span>
+        <span class="status-dot
+          {%- if health == 'healthy' %} status-dot--healthy
+          {%- elif health == 'degraded' %} status-dot--degraded
+          {%- else %} status-dot--error
+          {%- endif %}"
+          role="status"
+          aria-label="System status: {{ health | default('unknown') }}"
+          title="Status: {{ health | default('unknown') }}">
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Navigation -->
+  <nav class="site-nav" role="navigation" aria-label="Main navigation">
+    <ul class="nav-list">
+      <li class="nav-item">
+        <a href="/"
+           class="nav-link{% if active_nav == 'overview' %} nav-link--active{% endif %}"
+           aria-current="{% if active_nav == 'overview' %}page{% endif %}">
+          Overview
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="/#fan-card"
+           class="nav-link{% if active_nav == 'fan' %} nav-link--active{% endif %}">
+          Fan
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="/#led-card"
+           class="nav-link{% if active_nav == 'led' %} nav-link--active{% endif %}">
+          LED
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="/#oled-card"
+           class="nav-link{% if active_nav == 'oled' %} nav-link--active{% endif %}">
+          OLED
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="/#settings"
+           class="nav-link{% if active_nav == 'settings' %} nav-link--active{% endif %}">
+          Settings
+        </a>
+      </li>
+    </ul>
+  </nav>
+
+  <!-- Main content -->
+  <main id="main-content" class="main-content" role="main">
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- Footer -->
+  <footer class="site-footer" role="contentinfo">
+    <p class="footer-text">casectl &mdash; Freenove FNK0107B case controller</p>
+  </footer>
+
+  {% block scripts_extra %}{% endblock %}
+</body>
+</html>
