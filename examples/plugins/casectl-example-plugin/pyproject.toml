@@ -1,0 +1,13 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "casectl-example-plugin"
+version = "0.1.0"
+description = "Example casectl plugin demonstrating the plugin API"
+requires-python = ">=3.11"
+dependencies = ["casectl>=0.1.0"]
+
+[project.entry-points."casectl.plugins"]
+example = "casectl_example.plugin:ExamplePlugin"
