@@ -63,8 +63,9 @@ class BasicAuthMiddleware(BaseHTTPMiddleware):
         if request.url.path == "/api/ws":
             return await call_next(request)
 
-        # Allow static assets without auth (CSS, JS, images)
-        if request.url.path.startswith("/static/"):
+        # Allow static assets and HTMX partials without auth
+        # (partials are server-rendered HTML fragments, not sensitive data)
+        if request.url.path.startswith("/static/") or request.url.path.startswith("/w/"):
             return await call_next(request)
 
         # Check query parameter first (for browser access — avoids Basic Auth prompt)
