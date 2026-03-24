@@ -342,11 +342,11 @@ async def run_daemon(
     # -- 5. FastAPI application ---------------------------------------------
     from casectl.daemon.server import create_app
 
-    app = create_app(plugin_host, config_manager, event_bus)
-
     # -- 6. Resolve bind address/port --------------------------------------
     actual_host: str = host if host is not None else config.service.api_host
     actual_port: int = port if port is not None else config.service.api_port
+
+    app = create_app(plugin_host, config_manager, event_bus, host=actual_host)
 
     if actual_host == "0.0.0.0":
         logger.warning(

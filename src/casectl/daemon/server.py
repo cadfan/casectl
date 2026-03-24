@@ -9,13 +9,17 @@ and stopped alongside the ASGI server.
 
 from __future__ import annotations
 
+import hashlib
 import logging
+import os
+import secrets
 import time
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any, AsyncIterator
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 
 if TYPE_CHECKING:
     from casectl.config.manager import ConfigManager
@@ -35,6 +39,87 @@ except ImportError:
 
 
 # ---------------------------------------------------------------------------
+# Basic auth middleware
+# ---------------------------------------------------------------------------
+
+
+class BasicAuthMiddleware(BaseHTTPMiddleware):
+    """HTTP Basic Auth middleware using a bearer token or username:password.
+
+    The token is read from the ``CASECTL_API_TOKEN`` environment variable.
+    If not set, auth is disabled (localhost-only mode is safe without it).
+    When the API is bound to 0.0.0.0, a token is auto-generated if not set.
+    """
+
+    def __init__(self, app: Any, token: str | None = None) -> None:
+        super().__init__(app)
+        self._token = token
+
+    async def dispatch(self, request: Request, call_next: Any) -> Response:
+        if self._token is None:
+            return await call_next(request)
+
+        # Allow WebSocket upgrade without auth header (handled at WS level)
+        if request.url.path == "/api/ws":
+            return await call_next(request)
+
+        # Check Authorization header
+        auth = request.headers.get("Authorization", "")
+
+        # Support "Bearer <token>" format
+        if auth.startswith("Bearer "):
+            provided = auth[7:].strip()
+            if secrets.compare_digest(provided, self._token):
+                return await call_next(request)
+
+        # Support HTTP Basic Auth (username ignored, password = token)
+        if auth.startswith("Basic "):
+            import base64
+            try:
+                decoded = base64.b64decode(auth[6:]).decode("utf-8")
+                _, _, password = decoded.partition(":")
+                if secrets.compare_digest(password, self._token):
+                    return await call_next(request)
+            except Exception:
+                pass
+
+        # Check query parameter as fallback (for browser access)
+        if request.query_params.get("token") == self._token:
+            return await call_next(request)
+
+        return Response(
+            content='{"detail":"Unauthorized — provide token via Authorization header or ?token= query param"}',
+            status_code=401,
+            media_type="application/json",
+            headers={"WWW-Authenticate": 'Basic realm="casectl"'},
+        )
+
+
+def _resolve_api_token(host: str) -> str | None:
+    """Determine the API token to use.
+
+    - If CASECTL_API_TOKEN env var is set, use it.
+    - If binding to 0.0.0.0 (LAN), auto-generate and log a token.
+    - If localhost-only, no token needed.
+    """
+    token = os.environ.get("CASECTL_API_TOKEN")
+    if token:
+        return token
+
+    if host == "0.0.0.0":
+        token = secrets.token_urlsafe(24)
+        logger.warning(
+            "API bound to 0.0.0.0 with no CASECTL_API_TOKEN set. "
+            "Auto-generated token: %s",
+            token,
+        )
+        logger.warning("Access the dashboard at: http://<pi-ip>:8420/?token=%s", token)
+        return token
+
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Application factory
 # ---------------------------------------------------------------------------
 
@@ -43,6 +128,7 @@ def create_app(
     plugin_host: PluginHost,
     config_manager: ConfigManager,
     event_bus: EventBus,
+    host: str = "127.0.0.1",
 ) -> FastAPI:
     """Build and return a fully-configured :class:`FastAPI` application.
 
@@ -108,6 +194,17 @@ def create_app(
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # -- Authentication -----------------------------------------------------
+    # Auto-generates a token when bound to 0.0.0.0 (LAN access).
+    # Token is logged to stdout so the user can see it.
+
+    api_token = _resolve_api_token(host)
+    if api_token:
+        app.add_middleware(BasicAuthMiddleware, token=api_token)
+        app.state.api_token = api_token
+    else:
+        app.state.api_token = None
 
     # -- Request timing -----------------------------------------------------
 
