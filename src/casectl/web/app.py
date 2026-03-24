@@ -180,10 +180,8 @@ def create_web_router(plugin_host: PluginHost, config_manager: ConfigManager) ->
             if status.value == "degraded":
                 health = "degraded"
 
-        return templates.TemplateResponse(
-            "dashboard.html",
+        return templates.TemplateResponse(request, "dashboard.html",
             {
-                "request": request,
                 "hostname": hostname,
                 "health": health,
                 # Monitor data
@@ -215,10 +213,8 @@ def create_web_router(plugin_host: PluginHost, config_manager: ConfigManager) ->
     async def partial_monitor(request: Request) -> HTMLResponse:
         """Render the system monitor HTMX partial."""
         metrics = await _fetch_monitor_data(plugin_host)
-        return templates.TemplateResponse(
-            "partials/monitor.html",
+        return templates.TemplateResponse(request, "partials/monitor.html",
             {
-                "request": request,
                 "cpu_temp": metrics.get("cpu_temp", 0.0),
                 "cpu_percent": metrics.get("cpu_percent", 0.0),
                 "memory_percent": metrics.get("memory_percent", 0.0),
@@ -238,10 +234,8 @@ def create_web_router(plugin_host: PluginHost, config_manager: ConfigManager) ->
         rpm = metrics.get("motor_speed", [0, 0, 0])
         duty = fan.get("duty", [0, 0, 0])
 
-        return templates.TemplateResponse(
-            "partials/fan.html",
+        return templates.TemplateResponse(request, "partials/fan.html",
             {
-                "request": request,
                 "fan_mode": fan.get("mode", "unknown"),
                 "fan_duty": duty,
                 "fan_rpm": rpm,
@@ -252,10 +246,8 @@ def create_web_router(plugin_host: PluginHost, config_manager: ConfigManager) ->
     async def partial_led(request: Request) -> HTMLResponse:
         """Render the LED control HTMX partial."""
         led = await _fetch_led_data(plugin_host)
-        return templates.TemplateResponse(
-            "partials/led.html",
+        return templates.TemplateResponse(request, "partials/led.html",
             {
-                "request": request,
                 "led_mode": led.get("mode", "unknown"),
                 "led_color": led.get("color", {"red": 0, "green": 0, "blue": 0}),
             },
@@ -265,10 +257,8 @@ def create_web_router(plugin_host: PluginHost, config_manager: ConfigManager) ->
     async def partial_oled(request: Request) -> HTMLResponse:
         """Render the OLED config HTMX partial."""
         oled = await _fetch_oled_data(plugin_host)
-        return templates.TemplateResponse(
-            "partials/oled.html",
+        return templates.TemplateResponse(request, "partials/oled.html",
             {
-                "request": request,
                 "oled_current_screen": oled.get("current_screen", 0),
                 "oled_screen_names": oled.get("screen_names", []),
                 "oled_screens_enabled": oled.get("screens_enabled", []),
