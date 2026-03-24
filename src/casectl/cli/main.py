@@ -181,12 +181,25 @@ def fan_status(ctx: click.Context) -> None:
     console.print(table)
 
 
+_FAN_MODE_NAMES: dict[str, int] = {
+    "follow-temp": 0, "follow-rpi": 1, "manual": 2, "custom": 3, "off": 4,
+}
+
+
 @fan.command("mode")
-@click.argument("mode", type=int)
+@click.argument("mode", type=str)
 @click.pass_context
-def fan_mode(ctx: click.Context, mode: int) -> None:
-    """Set fan operating mode (0=follow_temp, 1=follow_rpi, 2=manual, 3=custom, 4=off)."""
-    data = _api_post(ctx, "/api/plugins/fan-control/mode", {"mode": mode})
+def fan_mode(ctx: click.Context, mode: str) -> None:
+    """Set fan mode (follow-temp, follow-rpi, manual, custom, off)."""
+    mode_int = _FAN_MODE_NAMES.get(mode.lower())
+    if mode_int is None:
+        try:
+            mode_int = int(mode)
+        except ValueError:
+            console.print(f"[red]Unknown mode:[/red] {mode}")
+            console.print(f"Valid modes: {', '.join(_FAN_MODE_NAMES)}")
+            raise SystemExit(1)
+    data = _api_post(ctx, "/api/plugins/fan-control/mode", {"mode": mode_int})
     console.print(f"[green]Fan mode set to:[/green] {data.get('mode', mode)}")
 
 
@@ -249,12 +262,25 @@ def led_status(ctx: click.Context) -> None:
     console.print(table)
 
 
+_LED_MODE_NAMES: dict[str, int] = {
+    "rainbow": 0, "breathing": 1, "follow-temp": 2, "manual": 3, "custom": 4, "off": 5,
+}
+
+
 @led.command("mode")
-@click.argument("mode", type=int)
+@click.argument("mode", type=str)
 @click.pass_context
-def led_mode(ctx: click.Context, mode: int) -> None:
-    """Set LED mode (0=rainbow, 1=breathing, 2=follow_temp, 3=manual, 4=custom, 5=off)."""
-    data = _api_post(ctx, "/api/plugins/led-control/mode", {"mode": mode})
+def led_mode(ctx: click.Context, mode: str) -> None:
+    """Set LED mode (rainbow, breathing, follow-temp, manual, custom, off)."""
+    mode_int = _LED_MODE_NAMES.get(mode.lower())
+    if mode_int is None:
+        try:
+            mode_int = int(mode)
+        except ValueError:
+            console.print(f"[red]Unknown mode:[/red] {mode}")
+            console.print(f"Valid modes: {', '.join(_LED_MODE_NAMES)}")
+            raise SystemExit(1)
+    data = _api_post(ctx, "/api/plugins/led-control/mode", {"mode": mode_int})
     console.print(f"[green]LED mode set to:[/green] {data.get('mode', mode)}")
 
 

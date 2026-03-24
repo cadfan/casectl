@@ -59,12 +59,16 @@ class BasicAuthMiddleware(BaseHTTPMiddleware):
         if self._token is None:
             return await call_next(request)
 
+        # Allow localhost connections without auth (CLI runs locally)
+        client_host = request.client.host if request.client else ""
+        if client_host in ("127.0.0.1", "::1", "localhost"):
+            return await call_next(request)
+
         # Allow WebSocket upgrade without auth header (handled at WS level)
         if request.url.path == "/api/ws":
             return await call_next(request)
 
         # Allow static assets and HTMX partials without auth
-        # (partials are server-rendered HTML fragments, not sensitive data)
         if request.url.path.startswith("/static/") or request.url.path.startswith("/w/"):
             return await call_next(request)
 
