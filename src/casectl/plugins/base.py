@@ -246,6 +246,11 @@ class PluginContext:
         return self._logger
 
     @property
+    def config_manager(self) -> ConfigManager | None:
+        """The configuration manager instance, or ``None``."""
+        return self._config_manager
+
+    @property
     def routes(self) -> APIRouter | None:
         """The FastAPI router registered by this plugin, or ``None``."""
         return self._router

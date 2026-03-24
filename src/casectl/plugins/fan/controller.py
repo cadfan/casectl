@@ -26,7 +26,6 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 POLL_INTERVAL: float = 3.0  # seconds between control loop iterations
-HYSTERESIS_BAND: int = 3     # Schmitt trigger hysteresis in degrees C
 
 
 class FanController:

@@ -54,7 +54,7 @@ class FanStatusResponse(BaseModel):
 class SetFanModeRequest(BaseModel):
     """Request body for POST /mode."""
 
-    mode: int = Field(description="Fan mode enum value (0-4)")
+    mode: int = Field(ge=0, le=4, description="Fan mode enum value (0-4)")
 
 
 class SetFanSpeedRequest(BaseModel):

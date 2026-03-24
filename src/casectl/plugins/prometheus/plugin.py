@@ -78,7 +78,7 @@ class PrometheusPlugin:
     def get_status(self) -> dict[str, Any]:
         """Return the current plugin status."""
         has_data = self._latest_metrics is not None
-        status = PluginStatus.HEALTHY if has_data else PluginStatus.DEGRADED
+        status = PluginStatus.HEALTHY
 
         return {
             "status": status,

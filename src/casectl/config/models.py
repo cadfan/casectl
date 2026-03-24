@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from enum import IntEnum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # ---------------------------------------------------------------------------
@@ -83,6 +83,16 @@ class FanConfig(BaseModel):
         default=[75, 75, 75],
         description="Per-fan PWM duty (0-255) when mode is MANUAL",
     )
+
+    @field_validator("manual_duty")
+    @classmethod
+    def _validate_manual_duty(cls, v: list[int]) -> list[int]:
+        for i, val in enumerate(v):
+            if not (0 <= val <= 255):
+                msg = f"manual_duty[{i}] must be between 0 and 255, got {val}"
+                raise ValueError(msg)
+        return v
+
     thresholds: FanThresholds = Field(
         default_factory=FanThresholds,
         description="Temperature-based speed thresholds",
@@ -110,9 +120,9 @@ class LedConfig(BaseModel):
     """Configuration for the RGB LEDs on the expansion board."""
 
     mode: LedMode = Field(default=LedMode.RAINBOW, description="LED operating mode")
-    red_value: int = Field(default=0, description="Red channel (0-255) for MANUAL mode")
-    green_value: int = Field(default=0, description="Green channel (0-255) for MANUAL mode")
-    blue_value: int = Field(default=255, description="Blue channel (0-255) for MANUAL mode")
+    red_value: int = Field(default=0, ge=0, le=255, description="Red channel (0-255) for MANUAL mode")
+    green_value: int = Field(default=0, ge=0, le=255, description="Green channel (0-255) for MANUAL mode")
+    blue_value: int = Field(default=255, ge=0, le=255, description="Blue channel (0-255) for MANUAL mode")
     is_run_on_startup: bool = Field(
         default=True,
         description="Start LED control automatically when daemon launches",

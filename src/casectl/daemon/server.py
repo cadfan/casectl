@@ -9,7 +9,6 @@ and stopped alongside the ASGI server.
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import os
 import secrets
@@ -17,7 +16,7 @@ import time
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any, AsyncIterator
 
-from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -262,6 +261,26 @@ def create_app(
                 status_code=404,
                 content={"detail": str(exc)},
             )
+
+    @app.patch("/api/config", tags=["core"])
+    async def patch_config(body: dict[str, Any]) -> dict[str, Any]:
+        """Update a configuration section with partial data.
+
+        The request body must include a ``section`` key identifying the
+        top-level config section to update.  Remaining keys are merged
+        into that section.
+        """
+        section = body.pop("section", None)
+        if not section:
+            raise HTTPException(status_code=400, detail="Missing 'section' key")
+        try:
+            updated = await config_manager.update(section, body)
+            return updated.model_dump(mode="json")
+        except KeyError:
+            raise HTTPException(status_code=404, detail="Unknown config section")
+        except Exception:
+            logger.error("Failed to update config", exc_info=True)
+            raise HTTPException(status_code=500, detail="Failed to update configuration")
 
     # -- WebSocket ----------------------------------------------------------
 

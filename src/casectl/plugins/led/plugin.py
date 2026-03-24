@@ -20,18 +20,6 @@ logger = logging.getLogger(__name__)
 # Polling interval for the LED control loop.
 POLL_INTERVAL: float = 3.0
 
-# Mapping from config-layer LedMode to the action the plugin should take.
-# Modes that delegate to the STM32 only need a hardware mode write.
-# MANUAL and OFF require additional commands (set colour or close).
-_MODE_TO_HW: dict[LedMode, LedHwMode] = {
-    LedMode.RAINBOW: LedHwMode.RAINBOW,
-    LedMode.BREATHING: LedHwMode.BREATHING,
-    LedMode.FOLLOW_TEMP: LedHwMode.FOLLOWING,
-    LedMode.MANUAL: LedHwMode.RGB,
-    LedMode.OFF: LedHwMode.CLOSE,
-}
-
-
 class LedControlPlugin:
     """LED control plugin that manages RGB LEDs on the expansion board.
 

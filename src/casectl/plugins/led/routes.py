@@ -49,7 +49,7 @@ class LedStatusResponse(BaseModel):
 class SetLedModeRequest(BaseModel):
     """Request body for POST /mode."""
 
-    mode: int = Field(description="LED mode enum value (0-5)")
+    mode: int = Field(ge=0, le=5, description="LED mode enum value (0-5)")
 
 
 class SetLedColorRequest(BaseModel):

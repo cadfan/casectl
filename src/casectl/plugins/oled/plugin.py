@@ -12,7 +12,11 @@ import logging
 from datetime import datetime
 from typing import Any
 
-from PIL import Image, ImageDraw
+try:
+    from PIL import Image, ImageDraw
+    _pil_available = True
+except ImportError:
+    _pil_available = False
 
 from casectl.config.models import OledConfig, OledScreenConfig
 from casectl.plugins.base import PluginContext, PluginStatus
