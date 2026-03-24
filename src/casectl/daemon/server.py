@@ -290,4 +290,14 @@ def create_app(
         app.include_router(router, prefix=prefix)
         logger.debug("Mounted plugin routes at %s", prefix)
 
+    # -- Mount web dashboard ------------------------------------------------
+    try:
+        from casectl.web.app import create_web_router
+
+        web_router = create_web_router(plugin_host, config_manager)
+        app.include_router(web_router)
+        logger.info("Web dashboard mounted at /")
+    except Exception:
+        logger.warning("Failed to mount web dashboard", exc_info=True)
+
     return app
