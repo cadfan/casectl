@@ -77,6 +77,26 @@ The codebase is **solid for a v0.1 release**. No critical issues remain. The 8 H
 
 The architecture is well-designed: clean layer separation, proper async patterns with I2C thread safety, graceful degradation, and a plugin system that works end-to-end (confirmed by the LED Off button test from the dashboard).
 
+## Codex Meta-Review (independent quality check of this review)
+
+**Scores:** Completeness 6/10, Accuracy 7/10, Prioritization 5/10, Actionability 7/10
+
+**Confirmed real:** S1 (WebSocket unauth), S2 (token plaintext), S4 (LAN IP no auth), S5 (error leaks)
+
+**Prioritization corrections:**
+- S4 should be HIGH not MEDIUM (disabling auth for non-loopback binds is serious)
+- Q5 (ConfigManager lock) is weak — should be deprioritized
+
+**Gaps the Claude review missed:**
+- `/w/*` dashboard partials exempt from auth but expose live metrics (CPU temp, fan duty, IP)
+- Misleading log warning says "no authentication" when a token IS auto-generated
+- SMTP password in config model is plaintext and exposed via GET /api/config/alerts
+
+**Action items from Codex:**
+- Upgrade S4 to HIGH
+- Add finding: `/w/*` partials leak live status data without auth
+- Fix misleading "no authentication" log message in runner.py
+
 ## QA Note
 
 QA testing (/qa) requires a browser which is not available on headless griffpi. Run `/qa` from your Win11 machine tomorrow, or install a headless browser on the Pi.
