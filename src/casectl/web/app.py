@@ -180,7 +180,7 @@ def create_web_router(plugin_host: PluginHost, config_manager: ConfigManager) ->
             if status.value == "degraded":
                 health = "degraded"
 
-        return templates.TemplateResponse(request, "dashboard.html",
+        response = templates.TemplateResponse(request, "dashboard.html",
             {
                 "hostname": hostname,
                 "health": health,
@@ -204,6 +204,13 @@ def create_web_router(plugin_host: PluginHost, config_manager: ConfigManager) ->
                 "oled_screens_enabled": oled.get("screens_enabled", []),
             },
         )
+
+        # Set auth cookie so HTMX partial requests authenticate without ?token=
+        token = request.query_params.get("token")
+        if token:
+            response.set_cookie("casectl_token", token, httponly=True, samesite="strict")
+
+        return response
 
     # -----------------------------------------------------------------------
     # HTMX partial routes

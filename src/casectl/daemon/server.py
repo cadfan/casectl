@@ -63,6 +63,20 @@ class BasicAuthMiddleware(BaseHTTPMiddleware):
         if request.url.path == "/api/ws":
             return await call_next(request)
 
+        # Allow static assets without auth (CSS, JS, images)
+        if request.url.path.startswith("/static/"):
+            return await call_next(request)
+
+        # Check query parameter first (for browser access — avoids Basic Auth prompt)
+        token_param = request.query_params.get("token")
+        if token_param and secrets.compare_digest(token_param, self._token):
+            return await call_next(request)
+
+        # Check cookie (set after successful token auth for subsequent requests)
+        cookie_token = request.cookies.get("casectl_token")
+        if cookie_token and secrets.compare_digest(cookie_token, self._token):
+            return await call_next(request)
+
         # Check Authorization header
         auth = request.headers.get("Authorization", "")
 
@@ -83,15 +97,11 @@ class BasicAuthMiddleware(BaseHTTPMiddleware):
             except Exception:
                 pass
 
-        # Check query parameter as fallback (for browser access)
-        if request.query_params.get("token") == self._token:
-            return await call_next(request)
-
         return Response(
-            content='{"detail":"Unauthorized — provide token via Authorization header or ?token= query param"}',
+            content='{"detail":"Unauthorized — provide token via ?token= query param, cookie, or Authorization header"}',
             status_code=401,
             media_type="application/json",
-            headers={"WWW-Authenticate": 'Basic realm="casectl"'},
+            headers={"WWW-Authenticate": 'Bearer realm="casectl"'},
         )
 
 
