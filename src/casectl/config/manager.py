@@ -270,6 +270,7 @@ class ConfigManager:
         """Write config as fresh YAML (no comment preservation)."""
         content = _generate_default_yaml(config)
         self._path.write_text(content, encoding="utf-8")
+        self._path.chmod(0o600)  # Restrict access — config may contain secrets
         logger.debug("Wrote config to %s", self._path)
 
     def _write_yaml_roundtrip(self, config: CaseCtlConfig) -> None:
@@ -300,6 +301,7 @@ class ConfigManager:
 
         with self._path.open("w", encoding="utf-8") as fh:
             self._yaml_rt.dump(merged, fh)
+        self._path.chmod(0o600)  # Restrict access — config may contain secrets
         logger.debug("Saved config (round-trip) to %s", self._path)
 
 

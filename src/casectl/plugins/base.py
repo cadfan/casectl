@@ -10,11 +10,18 @@ from __future__ import annotations
 
 import logging
 from enum import Enum
-from typing import Any, Callable, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Callable, Protocol, runtime_checkable
 
 import click
 from fastapi import APIRouter
 from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from casectl.config.manager import ConfigManager
+    from casectl.daemon.event_bus import EventBus
+    from casectl.hardware.expansion import ExpansionBoard
+    from casectl.hardware.oled import OledDevice
+    from casectl.hardware.system import SystemInfo
 
 logger = logging.getLogger(__name__)
 
@@ -46,30 +53,26 @@ class HardwareRegistry:
 
     def __init__(
         self,
-        expansion: Any | None = None,
-        oled: Any | None = None,
-        system_info: Any | None = None,
+        expansion: ExpansionBoard | None = None,
+        oled: OledDevice | None = None,
+        system_info: SystemInfo | None = None,
     ) -> None:
         self._expansion = expansion
         self._oled = oled
         self._system_info = system_info
 
-    # -- typed aliases used in annotations elsewhere (kept generic for now) --
-    # These will narrow to ExpansionBoard / OledDevice / SystemInfo once those
-    # modules are implemented.
-
     @property
-    def expansion(self) -> Any | None:
+    def expansion(self) -> ExpansionBoard | None:
         """STM32 expansion board driver (I2C 0x21), or ``None``."""
         return self._expansion
 
     @property
-    def oled(self) -> Any | None:
+    def oled(self) -> OledDevice | None:
         """SSD1306 OLED display driver (I2C 0x3C), or ``None``."""
         return self._oled
 
     @property
-    def system_info(self) -> Any | None:
+    def system_info(self) -> SystemInfo | None:
         """System information provider (CPU temp, memory, etc.), or ``None``."""
         return self._system_info
 
@@ -95,9 +98,9 @@ class PluginContext:
     def __init__(
         self,
         plugin_name: str,
-        config_manager: Any,
+        config_manager: ConfigManager | None,
         hardware_registry: HardwareRegistry,
-        event_bus: Any,
+        event_bus: EventBus | None,
     ) -> None:
         self._plugin_name = plugin_name
         self._config_manager = config_manager
@@ -170,23 +173,18 @@ class PluginContext:
         if self._config_manager is None:
             return {}
 
-        # Support both sync and async config managers.
         try:
-            config = self._config_manager.get(f"plugins.{self._plugin_name}")
-        except (KeyError, AttributeError):
+            plugins_section = await self._config_manager.get("plugins")
+        except (KeyError, AttributeError, Exception):
             return {}
 
-        if config is None:
-            return {}
+        if not isinstance(plugins_section, dict):
+            if isinstance(plugins_section, BaseModel):
+                plugins_section = plugins_section.model_dump()
+            else:
+                return {}
 
-        # If the config manager returns a Pydantic model, convert to dict.
-        if isinstance(config, BaseModel):
-            return config.model_dump()
-
-        if isinstance(config, dict):
-            return config
-
-        return {}
+        return plugins_section.get(self._plugin_name, {})
 
     # -- hardware -----------------------------------------------------------
 

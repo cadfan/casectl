@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 import time
 from enum import IntEnum
 from typing import TYPE_CHECKING
@@ -98,6 +99,7 @@ class ExpansionBoard:
         self._degraded: bool = False
         self._closed: bool = False
         self._last_transaction: float = 0.0
+        self._i2c_lock = threading.Lock()
 
         if not _available:
             logger.warning("smbus2 is not installed — expansion board will be unavailable")
@@ -170,46 +172,52 @@ class ExpansionBoard:
         if self._bus is None:
             raise OSError("I2C bus is not open")
 
-        self._inter_transaction_wait()
+        with self._i2c_lock:
+            self._inter_transaction_wait()
 
-        try:
-            self._bus.write_i2c_block_data(self._address, register, data)
-            self._on_success()
-        except OSError:
-            logger.debug(
-                "I2C write to 0x%02X failed, retrying in %.1fs", register, RETRY_DELAY
-            )
-            time.sleep(RETRY_DELAY)
             try:
                 self._bus.write_i2c_block_data(self._address, register, data)
                 self._on_success()
             except OSError:
-                self._on_error()
-                raise
+                logger.debug(
+                    "I2C write to 0x%02X failed, retrying in %.1fs", register, RETRY_DELAY
+                )
+                time.sleep(RETRY_DELAY)
+                try:
+                    self._bus.write_i2c_block_data(self._address, register, data)
+                    self._on_success()
+                except OSError:
+                    self._on_error()
+                    raise
 
     def _read_block(self, register: int, length: int) -> list[int]:
         """Read *length* bytes from *register* with retry-once semantics."""
         if self._bus is None:
             raise OSError("I2C bus is not open")
 
-        self._inter_transaction_wait()
+        with self._i2c_lock:
+            self._inter_transaction_wait()
 
-        try:
-            data: list[int] = self._bus.read_i2c_block_data(self._address, register, length)
-            self._on_success()
-            return data
-        except OSError:
-            logger.debug(
-                "I2C read from 0x%02X failed, retrying in %.1fs", register, RETRY_DELAY
-            )
-            time.sleep(RETRY_DELAY)
             try:
-                data = self._bus.read_i2c_block_data(self._address, register, length)
+                data: list[int] = self._bus.read_i2c_block_data(
+                    self._address, register, length
+                )
                 self._on_success()
                 return data
             except OSError:
-                self._on_error()
-                raise
+                logger.debug(
+                    "I2C read from 0x%02X failed, retrying in %.1fs", register, RETRY_DELAY
+                )
+                time.sleep(RETRY_DELAY)
+                try:
+                    data = self._bus.read_i2c_block_data(
+                        self._address, register, length
+                    )
+                    self._on_success()
+                    return data
+                except OSError:
+                    self._on_error()
+                    raise
 
     def _on_success(self) -> None:
         """Reset error tracking on a successful transaction."""
