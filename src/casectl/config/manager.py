@@ -47,7 +47,7 @@ def _generate_default_yaml(config: CaseCtlConfig) -> str:
     yaml.default_flow_style = False
     yaml.indent(mapping=2, sequence=4, offset=2)
 
-    data = config.model_dump(mode="python")
+    data = config.model_dump(mode="json")  # json mode converts enums to plain ints/strings
     stream = io.StringIO()
     yaml.dump(data, stream)
     return stream.getvalue()
@@ -279,7 +279,7 @@ class ConfigManager:
         If the file exists, the existing YAML tree is loaded first and values
         are deep-merged so that comments attached to keys survive.
         """
-        new_data = config.model_dump(mode="python")
+        new_data = config.model_dump(mode="json")
 
         if self._path.exists():
             try:
