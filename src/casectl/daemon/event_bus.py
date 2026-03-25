@@ -120,8 +120,8 @@ class EventBus:
                 if inspect.iscoroutinefunction(handler):
                     await handler(data)
                 else:
-                    # Run sync handlers; wrap in to_thread if they might block.
-                    handler(data)
+                    # Run sync handlers in a thread to avoid blocking the event loop.
+                    await asyncio.to_thread(handler, data)
             except Exception:
                 logger.error(
                     "Handler %r failed for event %r:\n%s",

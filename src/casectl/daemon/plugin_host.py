@@ -187,13 +187,11 @@ class PluginHost:
             from importlib.metadata import entry_points
 
             eps = entry_points(group="casectl.plugins")
+            builtin_values = {f"{mod}:{cls}" for mod, cls in _BUILTIN_PLUGINS}
             for ep in eps:
-                # Skip entry points that match built-in module paths — those
-                # were already handled above.
-                builtin_names = {cls_name for _, cls_name in _BUILTIN_PLUGINS}
-                if ep.value.split(":")[-1] in builtin_names:
-                    # This is a built-in registered as an entry point; we
-                    # already imported it above.
+                # Skip entry points that match built-in "module:class" values
+                # — those were already handled above.
+                if ep.value in builtin_values:
                     continue
 
                 try:

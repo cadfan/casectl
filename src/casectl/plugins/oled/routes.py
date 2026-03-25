@@ -6,7 +6,7 @@ Mounted at ``/api/plugins/oled-display`` by the plugin host.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -58,7 +58,7 @@ class SetScreenRequest(BaseModel):
 class SetRotationRequest(BaseModel):
     """Request body for POST /rotation."""
 
-    rotation: int = Field(description="Display rotation in degrees (0 or 180)")
+    rotation: Literal[0, 180] = Field(description="Display rotation in degrees (0 or 180)")
 
 
 # ---------------------------------------------------------------------------
@@ -120,12 +120,6 @@ async def set_rotation(request: SetRotationRequest) -> dict[str, Any]:
     """Set the display rotation."""
     if _get_config is None:
         raise HTTPException(status_code=503, detail="Config manager not available")
-
-    if request.rotation not in (0, 180):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Rotation must be 0 or 180, got {request.rotation}",
-        )
 
     try:
         config_manager = _get_config()

@@ -162,17 +162,17 @@ def test_patch_config_updates() -> None:
 
     resp = client.patch(
         "/api/config",
-        json={"section": "fan", "mode": 2},
+        json={"section": "fan", "values": {"mode": 2}},
     )
     assert resp.status_code == 200
     config_manager.update.assert_called_once_with("fan", {"mode": 2})
 
 
-def test_patch_config_missing_section_returns_400() -> None:
-    """PATCH /api/config without 'section' key returns 400."""
+def test_patch_config_missing_section_returns_422() -> None:
+    """PATCH /api/config without 'section' key returns 422 (validation error)."""
     client, _, _, _ = _make_test_app()
     resp = client.patch("/api/config", json={"mode": 2})
-    assert resp.status_code == 400
+    assert resp.status_code == 422
 
 
 # ---------------------------------------------------------------------------

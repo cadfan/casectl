@@ -6,7 +6,7 @@ Mounted at ``/api/plugins/fan-control`` by the plugin host.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -60,7 +60,7 @@ class SetFanModeRequest(BaseModel):
 class SetFanSpeedRequest(BaseModel):
     """Request body for POST /speed."""
 
-    duty: list[int] = Field(
+    duty: list[Annotated[int, Field(ge=0, le=100)]] = Field(
         description="Per-channel duty in API range (0-100%)",
         min_length=1,
         max_length=3,
@@ -78,22 +78,9 @@ async def fan_status() -> FanStatusResponse:
     if _controller is None:
         raise HTTPException(status_code=503, detail="Fan controller not initialised")
 
-    # Read RPM and temp from hardware if available.
-    rpm: list[int] = [0, 0, 0]
-    temp: float = 0.0
-
-    if _controller._expansion is not None and _controller._expansion.connected:
-        try:
-            speeds = await _controller._expansion.async_get_motor_speed()
-            rpm = list(speeds)
-        except OSError:
-            logger.debug("Failed to read motor speeds for status", exc_info=True)
-
-    if _controller._system_info is not None:
-        try:
-            temp = _controller._system_info.get_cpu_temperature()
-        except Exception:
-            logger.debug("Failed to read CPU temp for status", exc_info=True)
+    # Read RPM and temp via public controller methods.
+    rpm: list[int] = _controller.get_motor_speeds()
+    temp: float = _controller.get_cpu_temperature()
 
     return FanStatusResponse(
         mode=_controller.current_mode.name.lower(),
@@ -144,14 +131,6 @@ async def set_fan_speed(request: SetFanSpeedRequest) -> dict[str, Any]:
         raise HTTPException(status_code=503, detail="Config manager not available")
 
     from casectl.config.models import FanMode
-
-    # Validate duty values are in 0-100 range.
-    for d in request.duty:
-        if not 0 <= d <= 100:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Duty values must be 0-100, got {d}",
-            )
 
     # Convert 0-100% to 0-255 hardware range.
     hw_duty: list[int] = []

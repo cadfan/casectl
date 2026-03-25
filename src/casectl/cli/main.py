@@ -462,7 +462,7 @@ def config_set(ctx: click.Context, section: str, key: str, value: str) -> None:
             except ValueError:
                 pass  # keep as string
 
-    data = _api_patch(ctx, "/api/config", {"section": section, key: coerced})
+    data = _api_patch(ctx, "/api/config", {"section": section, "values": {key: coerced}})
     console.print(f"[green]Config updated:[/green] {section}.{key} = {coerced}")
 
 

@@ -70,9 +70,9 @@ class FanThresholds(BaseModel):
     low_temp: int = Field(default=30, description="Below this temp → low_speed")
     high_temp: int = Field(default=50, description="Above this temp → high_speed")
     schmitt: int = Field(default=3, description="Hysteresis band in °C")
-    low_speed: int = Field(default=75, description="PWM duty (0-255) for low temp range")
-    mid_speed: int = Field(default=125, description="PWM duty (0-255) for mid temp range")
-    high_speed: int = Field(default=175, description="PWM duty (0-255) for high temp range")
+    low_speed: int = Field(default=75, ge=0, le=255, description="PWM duty (0-255) for low temp range")
+    mid_speed: int = Field(default=125, ge=0, le=255, description="PWM duty (0-255) for mid temp range")
+    high_speed: int = Field(default=175, ge=0, le=255, description="PWM duty (0-255) for high temp range")
 
 
 class FanConfig(BaseModel):

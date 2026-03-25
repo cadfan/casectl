@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any, AsyncIterator
 
 from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
 from starlette.middleware.base import BaseHTTPMiddleware
 
 if TYPE_CHECKING:
@@ -157,6 +158,18 @@ def _resolve_api_token(host: str) -> str | None:
 
 
 # ---------------------------------------------------------------------------
+# Request models
+# ---------------------------------------------------------------------------
+
+
+class PatchConfigRequest(BaseModel):
+    """Request body for PATCH /api/config."""
+
+    section: str = Field(description="Config section to update (fan, led, oled, service, alerts)")
+    values: dict[str, Any] = Field(description="Key-value pairs to merge into the section")
+
+
+# ---------------------------------------------------------------------------
 # Application factory
 # ---------------------------------------------------------------------------
 
@@ -277,7 +290,10 @@ def create_app(
             Top-level key in ``config.yaml`` (e.g. ``fan``, ``led``, ``oled``).
         """
         try:
-            return await config_manager.get(section)
+            data = await config_manager.get(section)
+            if section == "alerts" and isinstance(data, dict):
+                data = {**data, "smtp_password": "***"} if "smtp_password" in data else data
+            return data
         except KeyError as exc:
             from fastapi.responses import JSONResponse
 
@@ -287,18 +303,18 @@ def create_app(
             )
 
     @app.patch("/api/config", tags=["core"])
-    async def patch_config(body: dict[str, Any]) -> dict[str, Any]:
+    async def patch_config(body: PatchConfigRequest) -> dict[str, Any]:
         """Update a configuration section with partial data.
 
         The request body must include a ``section`` key identifying the
-        top-level config section to update.  Remaining keys are merged
-        into that section.
+        top-level config section to update, and a ``values`` dict of
+        key-value pairs to merge into that section.
         """
-        section = body.pop("section", None)
+        section = body.section
         if not section:
             raise HTTPException(status_code=400, detail="Missing 'section' key")
         try:
-            updated = await config_manager.update(section, body)
+            updated = await config_manager.update(section, body.values)
             return updated.model_dump(mode="json")
         except KeyError:
             raise HTTPException(status_code=404, detail="Unknown config section")
@@ -319,11 +335,10 @@ def create_app(
         If the maximum number of WebSocket subscribers has been reached the
         connection is rejected with close code ``1008`` (Policy Violation).
         """
+        await websocket.accept()
         if not event_bus.add_ws_subscriber(websocket):
             await websocket.close(code=1008, reason="Too many connections")
             return
-
-        await websocket.accept()
         logger.debug("WebSocket client connected (%d active)", event_bus.ws_count)
 
         try:
