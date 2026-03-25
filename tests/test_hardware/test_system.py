@@ -28,35 +28,35 @@ class TestGetCpuTemperature:
     def test_get_cpu_temperature_millidegrees_conversion(self) -> None:
         """Sysfs reports millidegrees; verify conversion to float degrees C."""
         si = SystemInfo()
-        with patch.object(THERMAL_ZONE_PATH, "read_text", return_value="48250\n"):
+        with patch("pathlib.Path.read_text", return_value="48250\n"):
             temp = si.get_cpu_temperature()
         assert temp == pytest.approx(48.25)
 
     def test_get_cpu_temperature_exact_integer(self) -> None:
         """42000 millidegrees -> 42.0 C."""
         si = SystemInfo()
-        with patch.object(THERMAL_ZONE_PATH, "read_text", return_value="42000"):
+        with patch("pathlib.Path.read_text", return_value="42000"):
             temp = si.get_cpu_temperature()
         assert temp == 42.0
 
     def test_get_cpu_temperature_missing_file(self) -> None:
         """If the sysfs file does not exist, returns 0.0."""
         si = SystemInfo()
-        with patch.object(THERMAL_ZONE_PATH, "read_text", side_effect=FileNotFoundError):
+        with patch("pathlib.Path.read_text", side_effect=FileNotFoundError):
             temp = si.get_cpu_temperature()
         assert temp == 0.0
 
     def test_get_cpu_temperature_permission_error(self) -> None:
         """Permission denied on sysfs file returns 0.0."""
         si = SystemInfo()
-        with patch.object(THERMAL_ZONE_PATH, "read_text", side_effect=PermissionError):
+        with patch("pathlib.Path.read_text", side_effect=PermissionError):
             temp = si.get_cpu_temperature()
         assert temp == 0.0
 
     def test_get_cpu_temperature_corrupt_content(self) -> None:
         """Non-integer content in sysfs returns 0.0."""
         si = SystemInfo()
-        with patch.object(THERMAL_ZONE_PATH, "read_text", return_value="not_a_number"):
+        with patch("pathlib.Path.read_text", return_value="not_a_number"):
             temp = si.get_cpu_temperature()
         assert temp == 0.0
 
@@ -169,7 +169,7 @@ class TestGetFanDuty:
     def test_get_fan_duty_no_hwmon_dir(self) -> None:
         """When cooling_fan hwmon base does not exist, returns 0."""
         si = SystemInfo()
-        with patch.object(COOLING_FAN_HWMON_BASE, "is_dir", return_value=False):
+        with patch("pathlib.Path.is_dir", return_value=False):
             duty = si.get_fan_duty()
         assert duty == 0
 
@@ -182,8 +182,8 @@ class TestGetFanDuty:
 
         si = SystemInfo()
         with (
-            patch.object(COOLING_FAN_HWMON_BASE, "is_dir", return_value=True),
-            patch.object(COOLING_FAN_HWMON_BASE, "iterdir", return_value=[hwmon_dir]),
+            patch("pathlib.Path.is_dir", return_value=True),
+            patch("pathlib.Path.iterdir", return_value=[hwmon_dir]),
         ):
             duty = si.get_fan_duty()
 

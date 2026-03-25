@@ -128,9 +128,18 @@ class TestFollowTempBelowLow:
         assert ctrl.current_duty == [75, 75, 75]
 
     async def test_temp_zero(self) -> None:
-        """0C -> always 'low' band."""
+        """0C -> always 'low' band.
+
+        When cpu_temp is 0.0, _get_cpu_temp() skips the cached metrics
+        (because 0.0 fails the ``temp > 0`` guard) and falls back to
+        system_info.  We must set that fallback to 0.0 as well.
+        """
+        system_info = MagicMock()
+        system_info.get_cpu_temperature.return_value = 0.0
+        system_info.get_fan_duty.return_value = 0
+
         config = FanConfig(mode=FanMode.FOLLOW_TEMP)
-        ctrl = _make_controller(config=config)
+        ctrl = _make_controller(config=config, system_info=system_info)
         ctrl.update_metrics({"cpu_temp": 0.0})
 
         await ctrl.tick()
@@ -305,12 +314,23 @@ class TestManualMode:
         await ctrl.tick()
         assert ctrl.current_duty == [100, 150, 200]
 
-    async def test_manual_mode_clamps_values(self) -> None:
-        """Values outside 0-255 should be clamped."""
-        config = FanConfig(mode=FanMode.MANUAL, manual_duty=[300, -10, 128])
-        ctrl = _make_controller(config=config)
-        await ctrl.tick()
-        assert ctrl.current_duty == [255, 0, 128]
+    def test_manual_mode_clamps_values(self) -> None:
+        """_compute_manual clamps out-of-range values to 0-255.
+
+        The Pydantic validator rejects out-of-range values at construction
+        time, so we test the static clamping method directly with a
+        model_construct bypass.
+        """
+        config = FanConfig.model_construct(
+            mode=FanMode.MANUAL,
+            manual_duty=[300, -10, 128],
+            thresholds=FanThresholds(),
+            rpi_follow_min=0,
+            rpi_follow_max=255,
+            is_run_on_startup=True,
+        )
+        result = FanController._compute_manual(config)
+        assert result == [255, 0, 128]
 
     async def test_manual_mode_short_list(self) -> None:
         """A short manual_duty list pads with zeros."""

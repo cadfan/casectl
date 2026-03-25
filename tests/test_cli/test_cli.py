@@ -23,7 +23,7 @@ from casectl.cli.main import cli
 
 def _runner() -> CliRunner:
     """Return a Click CliRunner with isolated environment."""
-    return CliRunner(mix_stderr=False)
+    return CliRunner()
 
 
 def _mock_api_get(response_data: dict[str, Any]) -> MagicMock:
@@ -200,7 +200,7 @@ class TestFanStatusNoDaemon:
             result = runner.invoke(cli, ["fan", "status"])
 
         assert result.exit_code == 1
-        assert "Cannot connect" in result.stderr
+        assert "Cannot connect" in result.output
 
     def test_fan_status_success(self) -> None:
         mock_client = _mock_api_get({
