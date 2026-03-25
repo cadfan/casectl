@@ -128,7 +128,7 @@ async def set_fan_mode(request: SetFanModeRequest) -> dict[str, str]:
         await config_manager.update("fan", {"mode": request.mode})
     except Exception as exc:
         logger.error("Failed to update fan mode config", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
     return {"status": "ok", "mode": FanMode(request.mode).name.lower()}
 
@@ -170,6 +170,6 @@ async def set_fan_speed(request: SetFanSpeedRequest) -> dict[str, Any]:
         })
     except Exception as exc:
         logger.error("Failed to update fan speed config", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
     return {"status": "ok", "duty_hw": hw_duty}

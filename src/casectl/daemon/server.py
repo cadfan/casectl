@@ -50,9 +50,10 @@ class BasicAuthMiddleware(BaseHTTPMiddleware):
     When the API is bound to 0.0.0.0, a token is auto-generated if not set.
     """
 
-    def __init__(self, app: Any, token: str | None = None) -> None:
+    def __init__(self, app: Any, token: str | None = None, trust_proxy: bool = False) -> None:
         super().__init__(app)
         self._token = token
+        self._trust_proxy = trust_proxy
 
     async def dispatch(self, request: Request, call_next: Any) -> Response:
         if self._token is None:
@@ -60,8 +61,18 @@ class BasicAuthMiddleware(BaseHTTPMiddleware):
 
         # Allow localhost connections without auth (CLI runs locally)
         client_host = request.client.host if request.client else ""
-        if client_host in ("127.0.0.1", "::1", "localhost"):
-            return await call_next(request)
+
+        # Check for proxy: if trust_proxy is enabled, use X-Forwarded-For
+        forwarded_for = request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+        if self._trust_proxy and forwarded_for:
+            effective_host = forwarded_for
+            if client_host in ("127.0.0.1", "::1", "localhost") and effective_host not in ("127.0.0.1", "::1", "localhost"):
+                pass  # Don't bypass auth — real client is remote
+            elif effective_host in ("127.0.0.1", "::1", "localhost"):
+                return await call_next(request)  # Real client is local
+        else:
+            if client_host in ("127.0.0.1", "::1", "localhost"):
+                return await call_next(request)
 
         # Allow WebSocket upgrade without auth header (handled at WS level)
         if request.url.path == "/api/ws":
@@ -113,21 +124,33 @@ def _resolve_api_token(host: str) -> str | None:
     """Determine the API token to use.
 
     - If CASECTL_API_TOKEN env var is set, use it.
-    - If binding to 0.0.0.0 (LAN), auto-generate and log a token.
+    - If binding to a non-localhost address, auto-generate and save a token.
     - If localhost-only, no token needed.
     """
     token = os.environ.get("CASECTL_API_TOKEN")
     if token:
         return token
 
-    if host == "0.0.0.0":
+    # Auto-generate token for any non-localhost bind
+    _LOCALHOST = {"127.0.0.1", "::1", "localhost"}
+    if host not in _LOCALHOST:
         token = secrets.token_urlsafe(24)
+
+        # Write full token to file (0o600)
+        from pathlib import Path
+        token_dir = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "casectl"
+        token_dir.mkdir(parents=True, exist_ok=True)
+        token_path = token_dir / ".api-token"
+        token_path.write_text(token)
+        token_path.chmod(0o600)
+
         logger.warning(
-            "API bound to 0.0.0.0 with no CASECTL_API_TOKEN set. "
-            "Auto-generated token: %s",
-            token,
+            "API bound to %s with auto-generated token: %s...",
+            host, token[:8],
         )
-        logger.warning("Access the dashboard at: http://<pi-ip>:8420/?token=%s", token)
+        logger.warning("Full token written to %s", token_path)
+        logger.warning("Dashboard: http://<pi-ip>:%s/?token=<see token file>",
+                       os.environ.get("CASECTL_API_PORT", "8420"))
         return token
 
     return None
@@ -143,6 +166,7 @@ def create_app(
     config_manager: ConfigManager,
     event_bus: EventBus,
     host: str = "127.0.0.1",
+    trust_proxy: bool = False,
 ) -> FastAPI:
     """Build and return a fully-configured :class:`FastAPI` application.
 
@@ -215,7 +239,7 @@ def create_app(
 
     api_token = _resolve_api_token(host)
     if api_token:
-        app.add_middleware(BasicAuthMiddleware, token=api_token)
+        app.add_middleware(BasicAuthMiddleware, token=api_token, trust_proxy=trust_proxy)
         app.state.api_token = api_token
     else:
         app.state.api_token = None

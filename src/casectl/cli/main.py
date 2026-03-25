@@ -141,6 +141,25 @@ def _print_status_summary(ctx: click.Context) -> None:
 
 
 # ===================================================================
+# Token command
+# ===================================================================
+
+
+@cli.command("token")
+def show_token() -> None:
+    """Display the current API access token."""
+    from pathlib import Path
+    import os
+    token_path = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "casectl" / ".api-token"
+    if token_path.exists():
+        token = token_path.read_text().strip()
+        console.print(f"[green]API Token:[/green] {token}")
+        console.print(f"[dim]File:[/dim] {token_path}")
+    else:
+        console.print("[yellow]No token file found.[/yellow] Token is only generated when binding to a non-localhost address.")
+
+
+# ===================================================================
 # Fan commands
 # ===================================================================
 

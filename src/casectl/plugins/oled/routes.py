@@ -106,7 +106,7 @@ async def set_screen(request: SetScreenRequest) -> dict[str, Any]:
         raise
     except Exception as exc:
         logger.error("Failed to update OLED screen config", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
     return {
         "status": "ok",
@@ -132,6 +132,6 @@ async def set_rotation(request: SetRotationRequest) -> dict[str, Any]:
         await config_manager.update("oled", {"rotation": request.rotation})
     except Exception as exc:
         logger.error("Failed to update OLED rotation config", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
     return {"status": "ok", "rotation": request.rotation}

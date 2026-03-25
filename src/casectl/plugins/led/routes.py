@@ -103,7 +103,7 @@ async def set_led_mode(request: SetLedModeRequest) -> dict[str, str]:
         await config_manager.update("led", {"mode": request.mode})
     except Exception as exc:
         logger.error("Failed to update LED mode config", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
     return {"status": "ok", "mode": LedMode(request.mode).name.lower()}
 
@@ -129,7 +129,7 @@ async def set_led_color(request: SetLedColorRequest) -> dict[str, Any]:
         })
     except Exception as exc:
         logger.error("Failed to update LED colour config", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
     return {
         "status": "ok",

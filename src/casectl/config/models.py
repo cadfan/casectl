@@ -179,6 +179,7 @@ class ServiceConfig(BaseModel):
         default="127.0.0.1",
         description="Bind address (use 0.0.0.0 for LAN access)",
     )
+    trust_proxy: bool = Field(default=False, description="When True, check X-Forwarded-For instead of client IP for auth bypass. Set to True when behind a reverse proxy.")
     is_run_on_startup: bool = Field(
         default=False,
         description="Start the web API automatically when daemon launches",
