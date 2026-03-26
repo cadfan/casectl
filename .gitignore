@@ -15,3 +15,9 @@ venv/
 htmlcov/
 *.so
 .DS_Store
+
+# AI tooling / review artifacts
+.claude/
+.gstack/
+REVIEW-REPORT.md
+REVIEW-DETAILED.md
