@@ -13,7 +13,7 @@ from datetime import datetime
 from typing import Any
 
 try:
-    from PIL import Image, ImageDraw
+    from PIL import Image, ImageDraw, ImageFont
     _pil_available = True
 except ImportError:
     _pil_available = False
@@ -26,6 +26,117 @@ logger = logging.getLogger(__name__)
 # Display dimensions.
 DISPLAY_WIDTH: int = 128
 DISPLAY_HEIGHT: int = 64
+
+# ---------------------------------------------------------------------------
+# Fonts — loaded once at import, with graceful fallback to default bitmap.
+# ---------------------------------------------------------------------------
+_FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf"
+_FONT_PATH_REGULAR = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf"
+
+
+def _load_font(path: str, size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+    """Load a TrueType font, falling back to PIL default on failure."""
+    if not _pil_available:
+        return ImageFont.load_default()  # type: ignore[return-value]
+    try:
+        return ImageFont.truetype(path, size)
+    except (OSError, IOError):
+        return ImageFont.load_default()
+
+
+# Pre-load fonts at common sizes used by the screen renderers.
+_FONT_LARGE: ImageFont.FreeTypeFont | ImageFont.ImageFont = _load_font(_FONT_PATH, 24)
+_FONT_MED: ImageFont.FreeTypeFont | ImageFont.ImageFont = _load_font(_FONT_PATH, 14)
+_FONT_SMALL: ImageFont.FreeTypeFont | ImageFont.ImageFont = _load_font(_FONT_PATH, 11)
+_FONT_TINY: ImageFont.FreeTypeFont | ImageFont.ImageFont = _load_font(_FONT_PATH_REGULAR, 9)
+
+import math as _math
+
+
+def _draw_arc_gauge(
+    draw: ImageDraw.ImageDraw,
+    cx: int,
+    cy: int,
+    radius: int,
+    pct: float,
+    *,
+    ticks: int = 10,
+    start_angle: float = 225.0,
+    end_angle: float = 315.0,
+) -> None:
+    """Draw a sweep-arc gauge with tick marks and a needle.
+
+    *pct* is in the range 0-100. The arc sweeps clockwise from
+    *start_angle* to *end_angle* (degrees, 0 = right, counter-clockwise).
+    """
+    sweep = (360.0 - start_angle + end_angle) % 360.0
+    if sweep == 0:
+        sweep = 360.0
+
+    # Arc outline.
+    bbox = [cx - radius, cy - radius, cx + radius, cy + radius]
+    draw.arc(bbox, start=start_angle, end=end_angle, fill=1, width=1)
+
+    # Tick marks.
+    for i in range(ticks + 1):
+        frac = i / ticks
+        angle_deg = start_angle + frac * sweep
+        angle_rad = _math.radians(angle_deg)
+        inner = radius - 3
+        outer = radius
+        x0 = cx + inner * _math.cos(angle_rad)
+        y0 = cy + inner * _math.sin(angle_rad)
+        x1 = cx + outer * _math.cos(angle_rad)
+        y1 = cy + outer * _math.sin(angle_rad)
+        draw.line([(x0, y0), (x1, y1)], fill=1)
+
+    # Needle.
+    clamped = max(0.0, min(100.0, pct))
+    needle_angle_deg = start_angle + (clamped / 100.0) * sweep
+    needle_rad = _math.radians(needle_angle_deg)
+    nx = cx + (radius - 5) * _math.cos(needle_rad)
+    ny = cy + (radius - 5) * _math.sin(needle_rad)
+    draw.line([(cx, cy), (nx, ny)], fill=1, width=1)
+    draw.ellipse([cx - 2, cy - 2, cx + 2, cy + 2], fill=1)
+
+
+def _draw_filled_circle_pct(
+    draw: ImageDraw.ImageDraw,
+    cx: int,
+    cy: int,
+    radius: int,
+    pct: float,
+) -> None:
+    """Draw a circular percentage gauge with the value shown below."""
+    bbox = [cx - radius, cy - radius, cx + radius, cy + radius]
+    # Background circle outline.
+    draw.ellipse(bbox, outline=1)
+    # Filled arc showing percentage (PIL arc goes clockwise from 3-o'clock).
+    if pct > 0:
+        extent = max(1, pct / 100.0 * 360.0)
+        draw.pieslice(bbox, start=-90, end=-90 + extent, fill=1)
+    # Percentage text below the circle — always white on black, always readable.
+    text = f"{int(pct)}%"
+    tw = draw.textlength(text, font=_FONT_TINY)
+    tx = cx - tw / 2
+    ty = cy + radius + 2
+    draw.text((tx, ty), text, fill=1, font=_FONT_TINY)
+
+
+def _center_text(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    y: int,
+    font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
+    *,
+    region_width: int = DISPLAY_WIDTH,
+    x_offset: int = 0,
+) -> None:
+    """Draw *text* horizontally centered within *region_width* at the given *y*."""
+    tw = draw.textlength(text, font=font)
+    x = x_offset + (region_width - tw) / 2
+    draw.text((x, y), text, fill=1, font=font)
+
 
 # Screen names in order.
 SCREEN_NAMES: list[str] = ["clock", "metrics", "temperature", "fan_duty"]
@@ -212,9 +323,11 @@ class OledDisplayPlugin:
     # ------------------------------------------------------------------
 
     def _render_clock(self) -> Image.Image:
-        """Render the clock screen: date and time in large text.
+        """Render the clock screen with bordered rows and large time.
 
-        Returns a 128x64 monochrome PIL Image.
+        Layout matches the Freenove original: border box with two
+        horizontal dividers creating three rows — date, large time,
+        weekday.
         """
         image = Image.new("1", (DISPLAY_WIDTH, DISPLAY_HEIGHT), 0)
         draw = ImageDraw.Draw(image)
@@ -224,17 +337,26 @@ class OledDisplayPlugin:
         weekday_str = now.strftime("%A")
         time_str = now.strftime("%H:%M:%S")
 
-        # Layout: weekday at top, date in middle, time at bottom.
-        draw.text((2, 2), weekday_str, fill=1)
-        draw.text((2, 20), date_str, fill=1)
-        draw.text((2, 40), time_str, fill=1)
+        # Outer border and row dividers.
+        draw.rectangle([0, 0, 127, 63], outline=1)
+        draw.line([(0, 16), (127, 16)], fill=1)
+        draw.line([(0, 48), (127, 48)], fill=1)
+
+        # Row 1: date (centered, medium font).
+        _center_text(draw, date_str, 2, _FONT_SMALL)
+        # Row 2: time (centered, large font) — the hero element.
+        _center_text(draw, time_str, 20, _FONT_LARGE)
+        # Row 3: weekday (centered, medium font).
+        _center_text(draw, weekday_str, 50, _FONT_SMALL)
 
         return image
 
     def _render_metrics(self) -> Image.Image:
-        """Render the metrics screen: CPU%, MEM%, DISK% with text bars.
+        """Render the metrics screen with IP header and circle gauges.
 
-        Returns a 128x64 monochrome PIL Image.
+        Layout: bordered box, IP address row at top, then three columns
+        each with a label and a filled-circle percentage gauge for CPU,
+        MEM, and DISK.
         """
         image = Image.new("1", (DISPLAY_WIDTH, DISPLAY_HEIGHT), 0)
         draw = ImageDraw.Draw(image)
@@ -242,33 +364,38 @@ class OledDisplayPlugin:
         cpu = self._latest_metrics.get("cpu_percent", 0.0)
         mem = self._latest_metrics.get("memory_percent", 0.0)
         disk = self._latest_metrics.get("disk_percent", 0.0)
+        ip = self._latest_metrics.get("ip_address", "")
 
-        draw.text((2, 2), "System Metrics", fill=1)
+        # Outer border and header divider.
+        draw.rectangle([0, 0, 127, 63], outline=1)
+        draw.line([(0, 16), (127, 16)], fill=1)
 
-        # Draw text bars for each metric.
-        y_offset = 18
-        for label, value in [("CPU", cpu), ("MEM", mem), ("DSK", disk)]:
-            pct = max(0.0, min(100.0, value))
-            bar_width = int(pct / 100.0 * 80)
-            text = f"{label} {pct:4.1f}%"
-            draw.text((2, y_offset), text, fill=1)
+        # Column dividers below header.
+        draw.line([(43, 16), (43, 63)], fill=1)
+        draw.line([(86, 16), (86, 63)], fill=1)
 
-            # Draw bar outline and fill.
-            bar_x = 46
-            bar_y = y_offset + 1
-            bar_h = 8
-            draw.rectangle([bar_x, bar_y, bar_x + 80, bar_y + bar_h], outline=1)
-            if bar_width > 0:
-                draw.rectangle([bar_x, bar_y, bar_x + bar_width, bar_y + bar_h], fill=1)
+        # Header row: IP address.
+        ip_display = f"IP:{ip}" if ip else "IP: —"
+        _center_text(draw, ip_display, 3, _FONT_SMALL)
 
-            y_offset += 15
+        # Column labels.
+        _center_text(draw, "CPU", 18, _FONT_TINY, region_width=43, x_offset=0)
+        _center_text(draw, "MEM", 18, _FONT_TINY, region_width=43, x_offset=43)
+        _center_text(draw, "DISK", 18, _FONT_TINY, region_width=42, x_offset=86)
+
+        # Circle gauges — raised to leave room for percentage text below.
+        _draw_filled_circle_pct(draw, 21, 38, 12, cpu)
+        _draw_filled_circle_pct(draw, 64, 38, 12, mem)
+        _draw_filled_circle_pct(draw, 107, 38, 12, disk)
 
         return image
 
     def _render_temperature(self) -> Image.Image:
-        """Render the temperature screen: CPU temp and case temp.
+        """Render the temperature screen with analogue dial gauges.
 
-        Returns a 128x64 monochrome PIL Image.
+        Two-column layout: Pi (CPU) temp on the left, Case temp on the
+        right.  Each column has a label, a sweep-arc dial gauge, and
+        the numeric reading below.
         """
         image = Image.new("1", (DISPLAY_WIDTH, DISPLAY_HEIGHT), 0)
         draw = ImageDraw.Draw(image)
@@ -276,19 +403,29 @@ class OledDisplayPlugin:
         cpu_temp = self._latest_metrics.get("cpu_temp", 0.0)
         case_temp = self._latest_metrics.get("case_temp", 0.0)
 
-        draw.text((2, 2), "Temperature", fill=1)
-        draw.text((2, 22), f"CPU:  {cpu_temp:5.1f} C", fill=1)
-        draw.text((2, 42), f"Case: {case_temp:5.1f} C", fill=1)
+        # Border and vertical divider.
+        draw.rectangle([0, 0, 127, 63], outline=1)
+        draw.line([(64, 0), (64, 63)], fill=1)
+
+        # Labels.
+        _center_text(draw, "Pi", 1, _FONT_MED, region_width=64, x_offset=0)
+        _center_text(draw, "Case", 1, _FONT_MED, region_width=64, x_offset=64)
+
+        # Dial gauges (percentage of 0-100 °C range).
+        _draw_arc_gauge(draw, 32, 34, 16, min(cpu_temp, 100.0))
+        _draw_arc_gauge(draw, 96, 34, 16, min(case_temp, 100.0))
+
+        # Numeric readings.
+        _center_text(draw, f"{cpu_temp:.0f}C", 48, _FONT_MED, region_width=64, x_offset=0)
+        _center_text(draw, f"{case_temp:.0f}C", 48, _FONT_MED, region_width=64, x_offset=64)
 
         return image
 
     def _render_fan_duty(self) -> Image.Image:
-        """Render the fan duty screen: 3 channel duty percentages.
+        """Render the fan duty screen with three dial gauges.
 
-        Reads duty from cached metrics (hardware range 0-255) and displays
-        as percentages (0-100%).
-
-        Returns a 128x64 monochrome PIL Image.
+        Three-column layout: Pi (RPi PWM fan), C1, C2.  Each column has a
+        label, a sweep-arc dial, and the duty percentage below.
         """
         image = Image.new("1", (DISPLAY_WIDTH, DISPLAY_HEIGHT), 0)
         draw = ImageDraw.Draw(image)
@@ -297,15 +434,32 @@ class OledDisplayPlugin:
         if not isinstance(fan_duty, list) or len(fan_duty) < 3:
             fan_duty = [0, 0, 0]
 
-        draw.text((2, 2), "Fan Duty", fill=1)
+        rpi_fan_duty = self._latest_metrics.get("rpi_fan_duty", 0)
 
-        y_offset = 20
-        for i in range(3):
-            duty_hw = fan_duty[i] if i < len(fan_duty) else 0
-            duty_pct = duty_hw / 255.0 * 100.0
-            text = f"Fan {i + 1}: {duty_pct:5.1f}%"
-            draw.text((2, y_offset), text, fill=1)
-            y_offset += 15
+        # Border and column dividers.
+        draw.rectangle([0, 0, 127, 63], outline=1)
+        draw.line([(43, 0), (43, 63)], fill=1)
+        draw.line([(86, 0), (86, 63)], fill=1)
+
+        # Labels.
+        _center_text(draw, "Pi", 1, _FONT_SMALL, region_width=43, x_offset=0)
+        _center_text(draw, "C1", 1, _FONT_SMALL, region_width=43, x_offset=43)
+        _center_text(draw, "C2", 1, _FONT_SMALL, region_width=42, x_offset=86)
+
+        # Compute percentages (hardware range 0-255 for expansion, 0-255 for RPi).
+        pi_pct = rpi_fan_duty / 255.0 * 100.0
+        c1_pct = fan_duty[0] / 255.0 * 100.0
+        c2_pct = fan_duty[1] / 255.0 * 100.0
+
+        # Dial gauges.
+        _draw_arc_gauge(draw, 21, 34, 16, pi_pct)
+        _draw_arc_gauge(draw, 64, 34, 16, c1_pct)
+        _draw_arc_gauge(draw, 107, 34, 16, c2_pct)
+
+        # Percentage labels.
+        _center_text(draw, f"{pi_pct:.0f}%", 50, _FONT_SMALL, region_width=43, x_offset=0)
+        _center_text(draw, f"{c1_pct:.0f}%", 50, _FONT_SMALL, region_width=43, x_offset=43)
+        _center_text(draw, f"{c2_pct:.0f}%", 50, _FONT_SMALL, region_width=42, x_offset=86)
 
         return image
 
@@ -343,20 +497,27 @@ class OledDisplayPlugin:
     # Background loop
     # ------------------------------------------------------------------
 
-    async def _display_loop(self) -> None:
-        """Cycle through enabled screens, rendering each for its display_time.
+    # How often the display re-renders (seconds).  Keeps the clock
+    # seconds ticking and metric values fresh while staying on the
+    # same screen.
+    _RENDER_INTERVAL: float = 1.0
 
-        Reads configuration each cycle to pick up enable/disable changes.
-        Catches all exceptions to prevent the task from dying.
+    async def _display_loop(self) -> None:
+        """Cycle through enabled screens, re-rendering every second.
+
+        Each screen stays visible for its configured *display_time* but
+        is re-drawn every ``_RENDER_INTERVAL`` seconds so that the clock
+        ticks, percentage values update, etc.
         """
         logger.info("OLED display loop started")
+        import time as _time
+
+        screen_start: float = _time.monotonic()
 
         while True:
             try:
                 config = await self._get_oled_config()
 
-                # Find an enabled screen to display.
-                num_screens = len(SCREEN_NAMES)
                 # If current screen is disabled, advance to next enabled one.
                 current_enabled = (
                     self._current_screen < len(config.screens)
@@ -366,25 +527,30 @@ class OledDisplayPlugin:
                 if not current_enabled:
                     next_screen = self._find_next_enabled_screen(config)
                     if next_screen is None:
-                        # No screens enabled — sleep and retry.
                         await asyncio.sleep(1.0)
                         continue
                     self._current_screen = next_screen
+                    screen_start = _time.monotonic()
 
-                # Render the current screen.
+                # Re-render the current screen (picks up fresh metrics
+                # and the current time).
                 renderer = self._RENDERERS.get(self._current_screen)
                 if renderer is not None:
                     image = renderer(self)
                     await self._render_to_display(image)
 
-                # Wait for the configured display time.
-                display_time = self._get_screen_display_time(config, self._current_screen)
-                await asyncio.sleep(display_time)
+                # Check whether it's time to advance to the next screen.
+                display_time = self._get_screen_display_time(
+                    config, self._current_screen,
+                )
+                elapsed = _time.monotonic() - screen_start
+                if elapsed >= display_time:
+                    next_screen = self._find_next_enabled_screen(config)
+                    if next_screen is not None:
+                        self._current_screen = next_screen
+                    screen_start = _time.monotonic()
 
-                # Advance to the next enabled screen.
-                next_screen = self._find_next_enabled_screen(config)
-                if next_screen is not None:
-                    self._current_screen = next_screen
+                await asyncio.sleep(self._RENDER_INTERVAL)
 
             except asyncio.CancelledError:
                 logger.info("OLED display loop cancelled")
