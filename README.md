@@ -41,7 +41,9 @@ casectl fan speed 0 80          # Set channel 0 to 80% duty
 # LED control
 casectl led status
 casectl led mode rainbow        # or: breathing, follow-temp, manual, custom, off
-casectl led color 255 0 128     # Set RGB colour (switches to manual mode)
+casectl led color red            # Named colour (16 built-in names)
+casectl led color '#FF0080'      # Hex code
+casectl led color 255 0 128      # R G B values (0-255 each)
 
 # OLED display
 casectl oled status
