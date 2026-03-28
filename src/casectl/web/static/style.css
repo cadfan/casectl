@@ -589,6 +589,272 @@ img {
   border-radius: var(--radius-full);
 }
 
+/* Mode dropdown select */
+.mode-select {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  color: var(--text-primary);
+  background: var(--surface-2, var(--card-bg));
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+  border-radius: var(--radius-md, 6px);
+  padding: var(--space-1) var(--space-3);
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='%234fc3f7'%3E%3Cpath d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  padding-right: var(--space-6, 28px);
+  min-width: 160px;
+  min-height: 36px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.mode-select:hover {
+  border-color: var(--accent);
+}
+
+.mode-select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-color: var(--accent);
+}
+
+.mode-select option {
+  background: var(--bg-primary, #1a1a2e);
+  color: var(--text-primary);
+}
+
+/* Colour picker controls */
+.color-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.color-label {
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}
+
+.color-picker {
+  width: 40px;
+  height: 36px;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+  border-radius: var(--radius-md, 6px);
+  cursor: pointer;
+  padding: 2px;
+  background: transparent;
+}
+
+.color-picker::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.color-picker::-webkit-color-swatch {
+  border: none;
+  border-radius: 3px;
+}
+
+.color-hex {
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}
+
+/* Hex text input */
+.hex-input {
+  width: 7em;
+  font-size: var(--fs-sm);
+  color: var(--text-primary);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  text-transform: uppercase;
+}
+
+.hex-input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.hex-input.hex-input--invalid {
+  border-color: var(--error);
+}
+
+/* --------------------------------------------------------------------------
+   RGB Sliders (colour picker component)
+   -------------------------------------------------------------------------- */
+
+.colour-picker-component {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.rgb-sliders {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.rgb-slider-row {
+  display: grid;
+  grid-template-columns: 1.5rem 1fr 2.5rem;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.rgb-label {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  text-transform: uppercase;
+}
+
+.rgb-label--red   { color: #ef5350; }
+.rgb-label--green { color: #81c784; }
+.rgb-label--blue  { color: #4fc3f7; }
+
+.rgb-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  cursor: pointer;
+  background: var(--border);
+}
+
+.rgb-slider--red {
+  background: linear-gradient(to right, #000, #ff0000);
+}
+
+.rgb-slider--green {
+  background: linear-gradient(to right, #000, #00ff00);
+}
+
+.rgb-slider--blue {
+  background: linear-gradient(to right, #000, #0000ff);
+}
+
+.rgb-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--text-primary);
+  cursor: pointer;
+  border: 2px solid var(--bg-card);
+}
+
+.rgb-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--text-primary);
+  cursor: pointer;
+  border: 2px solid var(--bg-card);
+}
+
+.rgb-value {
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+  text-align: right;
+}
+
+/* --------------------------------------------------------------------------
+   Named Colour Presets
+   -------------------------------------------------------------------------- */
+
+.colour-presets {
+  padding-top: var(--space-2);
+}
+
+.presets-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.preset-swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  border: 2px solid var(--border);
+  background: var(--swatch);
+  cursor: pointer;
+  padding: 0;
+  transition: border-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.preset-swatch:hover {
+  border-color: var(--text-primary);
+  transform: scale(1.15);
+}
+
+.preset-swatch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.preset-swatch--active {
+  border-color: var(--accent);
+  box-shadow: 0 0 6px var(--accent);
+}
+
+/* Manual controls (duty slider) */
+.manual-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.manual-label {
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.duty-slider {
+  flex: 1;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--border, rgba(255, 255, 255, 0.12));
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.duty-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+}
+
+.duty-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: none;
+}
+
+.slider-value {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--accent);
+  min-width: 3em;
+  text-align: right;
+}
+
 /* --------------------------------------------------------------------------
    14. Fan Partial Styles
    -------------------------------------------------------------------------- */
@@ -609,6 +875,26 @@ img {
   padding: var(--space-3);
   background: var(--bg-input);
   border-radius: var(--radius-sm);
+}
+
+/* Per-channel fan duty slider (inside fan-channel card) */
+.fan-channel-slider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.fan-channel-slider .duty-slider {
+  flex: 1;
+}
+
+.fan-channel-slider-value {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--accent);
+  min-width: 3em;
+  text-align: right;
   border: 1px solid var(--border);
 }
 

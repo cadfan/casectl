@@ -1,6 +1,29 @@
 <!-- OLED Display HTMX Partial -->
 <div class="oled-partial">
 
+  <!-- Power toggle + rotation controls -->
+  <div class="oled-controls-row" role="group" aria-label="OLED display controls">
+    {% set any_enabled = oled_screens_enabled | select | list | length > 0 %}
+    <button type="button"
+            class="btn btn--toggle{% if any_enabled %} btn--active{% endif %}"
+            data-oled-power-toggle
+            data-oled-power-on="{{ 'true' if any_enabled else 'false' }}"
+            aria-pressed="{{ 'true' if any_enabled else 'false' }}"
+            title="{{ 'Power off OLED (disable all screens)' if any_enabled else 'Power on OLED (enable all screens)' }}">
+      <span class="toggle-indicator{% if any_enabled %} toggle-indicator--on{% endif %}" aria-hidden="true"></span>
+      {{ "OLED On" if any_enabled else "OLED Off" }}
+    </button>
+
+    <label class="oled-rotation-label" for="oled-rotation-select">
+      Rotation:
+      <select id="oled-rotation-select" class="select select--compact"
+              aria-label="OLED display rotation">
+        <option value="0"{% if oled_rotation == 0 %} selected{% endif %}>0&deg;</option>
+        <option value="180"{% if oled_rotation == 180 %} selected{% endif %}>180&deg;</option>
+      </select>
+    </label>
+  </div>
+
   <!-- Mini OLED preview -->
   <div class="oled-preview-container">
     <div class="oled-preview" aria-label="OLED display preview">
@@ -52,9 +75,9 @@
       {% set is_enabled = oled_screens_enabled[loop.index0] | default(true) %}
       <button type="button"
               class="btn btn--toggle{% if is_enabled %} btn--active{% endif %}{% if loop.index0 == oled_current_screen %} btn--current{% endif %}"
-              hx-put="/api/plugins/oled-display/screen"
-              hx-vals='{"index": {{ loop.index0 }}, "enabled": {{ "false" if is_enabled else "true" }}}'
-              hx-swap="none"
+              data-oled-screen-toggle
+              data-oled-screen-index="{{ loop.index0 }}"
+              data-oled-screen-enabled="{{ 'true' if is_enabled else 'false' }}"
               aria-pressed="{{ 'true' if is_enabled else 'false' }}"
               title="{{ 'Disable' if is_enabled else 'Enable' }} {{ screen_labels.get(name, name) }} screen">
         <span class="toggle-indicator{% if is_enabled %} toggle-indicator--on{% endif %}" aria-hidden="true"></span>
@@ -64,6 +87,38 @@
         {% endif %}
       </button>
     {% endfor %}
+  </div>
+
+  <!-- Content settings (per-screen display time + clock time format) -->
+  <div class="oled-content-settings" role="group" aria-label="OLED content settings">
+    {% set screen_labels = {"clock": "Clock", "metrics": "Metrics", "temperature": "Temps", "fan_duty": "Fan Duty"} %}
+    <div class="oled-settings-grid">
+      {% for name in oled_screen_names %}
+        {% set display_time = oled_screen_display_times[loop.index0] | default(5.0) if oled_screen_display_times is defined else 5.0 %}
+        <label class="oled-setting-item">
+          {{ screen_labels.get(name, name) }}:
+          <input type="number"
+                 class="input input--compact oled-display-time-input"
+                 data-screen-index="{{ loop.index0 }}"
+                 value="{{ display_time }}"
+                 min="1" max="60" step="0.5"
+                 aria-label="{{ screen_labels.get(name, name) }} display time (seconds)"
+                 title="Seconds to display this screen">
+          <span class="input-suffix">s</span>
+        </label>
+      {% endfor %}
+    </div>
+
+    {% if "clock" in oled_screen_names %}
+    <label class="oled-setting-item oled-time-format" for="oled-time-format-select">
+      Clock format:
+      <select id="oled-time-format-select" class="select select--compact"
+              aria-label="Clock time format">
+        <option value="0"{% if oled_time_format == 0 %} selected{% endif %}>24h</option>
+        <option value="1"{% if oled_time_format == 1 %} selected{% endif %}>12h</option>
+      </select>
+    </label>
+    {% endif %}
   </div>
 
 </div>

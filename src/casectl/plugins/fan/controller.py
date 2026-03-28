@@ -11,8 +11,9 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
-from casectl.config.models import FanConfig, FanMode
+from casectl.config.models import FanConfig, FanCurveConfig, FanMode
 from casectl.hardware.expansion import FanHwMode
+from casectl.plugins.fan.curve import FanCurveInterpolator
 
 if TYPE_CHECKING:
     from casectl.config.manager import ConfigManager
@@ -76,6 +77,11 @@ class FanController:
         # Latest metrics snapshot from the event bus (optional, used by
         # follow_temp mode to read CPU temperature without extra I2C calls).
         self._latest_metrics: dict[str, Any] | None = None
+
+        # Fan curve interpolator for CUSTOM mode (lazy-initialised).
+        self._curve_interpolator: FanCurveInterpolator | None = None
+        # Track the curve config to detect changes requiring re-init.
+        self._curve_config_name: str | None = None
 
     # ------------------------------------------------------------------
     # Properties
@@ -287,6 +293,28 @@ class FanController:
         """All channels to zero duty."""
         return [0, 0, 0]
 
+    def _get_curve_interpolator(self, curve_config: FanCurveConfig) -> FanCurveInterpolator:
+        """Return a FanCurveInterpolator, re-creating it if the config changed."""
+        if (
+            self._curve_interpolator is None
+            or self._curve_config_name != curve_config.name
+        ):
+            self._curve_interpolator = FanCurveInterpolator(curve_config)
+            self._curve_config_name = curve_config.name
+        return self._curve_interpolator
+
+    def _compute_custom_curve(self, config: FanConfig) -> list[int]:
+        """Compute duty using a custom multi-point fan curve.
+
+        Uses the FanCurveInterpolator for piecewise-linear interpolation
+        with hysteresis.  All three channels get the same duty value.
+        """
+        temp = self._get_cpu_temp()
+        interpolator = self._get_curve_interpolator(config.curve)
+        duty = interpolator.compute(temp)
+        duty = max(0, min(255, duty))
+        return [duty, duty, duty]
+
     # ------------------------------------------------------------------
     # Apply duty to hardware
     # ------------------------------------------------------------------
@@ -337,10 +365,12 @@ class FanController:
             duty = self._compute_follow_rpi(config)
         elif config.mode == FanMode.MANUAL:
             duty = self._compute_manual(config)
+        elif config.mode == FanMode.CUSTOM:
+            duty = self._compute_custom_curve(config)
         elif config.mode == FanMode.OFF:
             duty = self._compute_off()
         else:
-            # CUSTOM or unknown — treat as manual fallback.
+            # Unknown mode — treat as manual fallback.
             duty = self._compute_manual(config)
 
         await self._apply_duty(duty)

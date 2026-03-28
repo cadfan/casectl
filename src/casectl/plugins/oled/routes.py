@@ -77,6 +77,30 @@ class SetRotationRequest(BaseModel):
     rotation: Literal[0, 180] = Field(description="Display rotation in degrees (0 or 180)")
 
 
+class SetPowerRequest(BaseModel):
+    """Request body for PUT /power."""
+
+    enabled: bool = Field(description="Whether to enable or disable all screens")
+
+
+class SetContentRequest(BaseModel):
+    """Request body for PUT /content."""
+
+    screen_index: int = Field(ge=0, le=3, description="Screen index (0-3)")
+    display_time: float | None = Field(
+        default=None, gt=0, description="Seconds to display this screen"
+    )
+    time_format: Literal[0, 1] | None = Field(
+        default=None, description="Time format: 0=24h, 1=12h"
+    )
+    date_format: int | None = Field(
+        default=None, ge=0, description="Date display variant"
+    )
+    interchange: int | None = Field(
+        default=None, ge=0, description="Additional display option"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -141,3 +165,69 @@ async def set_rotation(
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return {"status": "ok", "rotation": request.rotation}
+
+
+@router.put("/power")
+async def set_power(
+    request: SetPowerRequest,
+    config_manager: Annotated[Any, Depends(_get_oled_config_manager)],
+) -> dict[str, Any]:
+    """Enable or disable all OLED screens at once (power on/off).
+
+    Matches CLI ``casectl oled on`` / ``casectl oled off`` behaviour.
+    """
+    try:
+        raw = await config_manager.get("oled")
+        screens = raw.get("screens", [])
+        for screen in screens:
+            screen["enabled"] = request.enabled
+        await config_manager.update("oled", {"screens": screens})
+    except Exception:
+        logger.error("Failed to update OLED power state", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    return {"status": "ok", "enabled": request.enabled}
+
+
+@router.put("/content")
+async def set_content(
+    request: SetContentRequest,
+    config_manager: Annotated[Any, Depends(_get_oled_config_manager)],
+) -> dict[str, Any]:
+    """Update per-screen content settings (display time, time format, etc.).
+
+    Only fields present in the request body are modified; unset fields
+    are left unchanged.
+    """
+    try:
+        raw = await config_manager.get("oled")
+        screens = raw.get("screens", [])
+        if request.screen_index >= len(screens):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Screen index {request.screen_index} out of range (0-{len(screens) - 1})",
+            )
+
+        screen = dict(screens[request.screen_index])
+        if request.display_time is not None:
+            screen["display_time"] = request.display_time
+        if request.time_format is not None:
+            screen["time_format"] = request.time_format
+        if request.date_format is not None:
+            screen["date_format"] = request.date_format
+        if request.interchange is not None:
+            screen["interchange"] = request.interchange
+
+        screens[request.screen_index] = screen
+        await config_manager.update("oled", {"screens": screens})
+    except HTTPException:
+        raise
+    except Exception:
+        logger.error("Failed to update OLED content settings", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    return {
+        "status": "ok",
+        "screen_index": request.screen_index,
+        "settings": screen,
+    }

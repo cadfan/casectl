@@ -589,6 +589,92 @@ def config_set(ctx: click.Context, section: str, key: str, value: str) -> None:
 # ===================================================================
 
 
+@cli.command("top")
+@click.option(
+    "--interval",
+    "-n",
+    default=2.0,
+    type=float,
+    show_default=True,
+    help="Refresh interval in seconds (0.5-60).",
+)
+@click.option(
+    "--once",
+    is_flag=True,
+    default=False,
+    help="Render a single snapshot and exit (useful for scripts/CI).",
+)
+@click.pass_context
+def top(ctx: click.Context, interval: float, once: bool) -> None:
+    """Interactive terminal dashboard with real-time system stats.
+
+    \b
+    Displays CPU temperature, fan speed/mode, RGB LED status, memory,
+    disk usage, and daemon health in a live-updating Rich layout.
+
+    \b
+    Interactive keys:
+      m       Cycle fan mode (follow-temp → follow-rpi → manual → off)
+      + / =   Increase fan speed by 10%
+      -       Decrease fan speed by 10%
+      q       Quit
+
+    Press q or Ctrl+C to quit.
+    """
+    from casectl.tui.top import (
+        MIN_REFRESH_INTERVAL,
+        MAX_REFRESH_INTERVAL,
+        build_layout,
+        fetch_dashboard_data,
+        run_top,
+    )
+
+    base_url = _base_url(ctx)
+
+    # --once mode: single snapshot, no interactivity required
+    if once:
+        data = fetch_dashboard_data(base_url)
+        layout = build_layout(data, interval)
+        console.print(layout)
+        connected = data.get("health") is not None
+        if not connected:
+            err_console.print(
+                "[yellow]Warning: could not reach daemon at "
+                f"{base_url}[/yellow]"
+            )
+        return
+
+    # Interactive mode: check terminal suitability
+    if not sys.stdout.isatty():
+        err_console.print(
+            "[bold red]casectl top requires an interactive terminal.[/]\n"
+            "Use [cyan]--once[/] for a single non-interactive snapshot."
+        )
+        raise SystemExit(1)
+
+    # Validate terminal size (minimum 60x15 for a readable layout)
+    term_size = os.get_terminal_size(sys.stdout.fileno())
+    if term_size.columns < 60 or term_size.lines < 15:
+        err_console.print(
+            f"[bold yellow]Terminal too small ({term_size.columns}x{term_size.lines}).[/]\n"
+            "casectl top needs at least 60 columns × 15 rows.\n"
+            "Resize your terminal or use [cyan]--once[/] for a static snapshot."
+        )
+        raise SystemExit(1)
+
+    # Validate interval
+    if interval < MIN_REFRESH_INTERVAL or interval > MAX_REFRESH_INTERVAL:
+        err_console.print(
+            f"[yellow]Refresh interval clamped to "
+            f"[{MIN_REFRESH_INTERVAL:.1f}, {MAX_REFRESH_INTERVAL:.1f}]s range.[/]"
+        )
+
+    run_top(
+        base_url=base_url,
+        refresh_interval=interval,
+    )
+
+
 @cli.command("serve")
 @click.option("--bind", default=None, help="Bind address (default from config).")
 @click.option("--port", default=None, type=int, help="Bind port (default from config).")

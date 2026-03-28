@@ -1,10 +1,24 @@
 <!-- LED Control HTMX Partial -->
 <div class="led-partial">
 
-  <!-- Current mode badge -->
+  <!-- Mode dropdown control -->
   <div class="mode-display">
-    <span class="mode-label">Mode:</span>
-    <span class="mode-badge">{{ led_mode | replace("_", " ") | title }}</span>
+    <label class="mode-label" for="led-mode-select">Mode:</label>
+    <select id="led-mode-select"
+            class="mode-select"
+            hx-put="/api/plugins/led-control/mode"
+            hx-vals="js:{mode: parseInt(event.target.value)}"
+            hx-trigger="change"
+            hx-swap="none"
+            data-ws-command="set_led_mode"
+            aria-label="LED mode">
+      <option value="0"{% if led_mode == 'rainbow' %} selected{% endif %}>Rainbow</option>
+      <option value="1"{% if led_mode == 'breathing' %} selected{% endif %}>Breathing</option>
+      <option value="2"{% if led_mode == 'follow_temp' %} selected{% endif %}>Follow Temp</option>
+      <option value="3"{% if led_mode == 'manual' %} selected{% endif %}>Manual</option>
+      <option value="4"{% if led_mode == 'custom' %} selected{% endif %}>Custom</option>
+      <option value="5"{% if led_mode == 'off' %} selected{% endif %}>Off</option>
+    </select>
   </div>
 
   <!-- LED preview strip -->
@@ -18,6 +32,7 @@
     </div>
     {% elif led_mode == 'manual' or led_mode == 'custom' %}
     <div class="led-strip led-strip--solid" aria-label="LED preview: solid colour"
+         id="led-preview-strip"
          style="background: rgb({{ led_color.red }}, {{ led_color.green }}, {{ led_color.blue }})">
     </div>
     {% elif led_mode == 'follow_temp' %}
@@ -29,48 +44,94 @@
     {% endif %}
   </div>
 
-  <!-- Mode buttons -->
-  <div class="control-buttons" role="group" aria-label="LED mode controls">
-    <button type="button"
-            class="btn btn--control{% if led_mode == 'rainbow' %} btn--active{% endif %}"
-            hx-put="/api/plugins/led-control/mode"
-            hx-vals='{"mode": 0}'
-            hx-swap="none"
-            aria-pressed="{{ 'true' if led_mode == 'rainbow' else 'false' }}">
-      Rainbow
-    </button>
-    <button type="button"
-            class="btn btn--control{% if led_mode == 'breathing' %} btn--active{% endif %}"
-            hx-put="/api/plugins/led-control/mode"
-            hx-vals='{"mode": 1}'
-            hx-swap="none"
-            aria-pressed="{{ 'true' if led_mode == 'breathing' else 'false' }}">
-      Breathing
-    </button>
-    <button type="button"
-            class="btn btn--control{% if led_mode == 'follow_temp' %} btn--active{% endif %}"
-            hx-put="/api/plugins/led-control/mode"
-            hx-vals='{"mode": 2}'
-            hx-swap="none"
-            aria-pressed="{{ 'true' if led_mode == 'follow_temp' else 'false' }}">
-      Follow Temp
-    </button>
-    <button type="button"
-            class="btn btn--control{% if led_mode == 'manual' %} btn--active{% endif %}"
-            hx-put="/api/plugins/led-control/mode"
-            hx-vals='{"mode": 3}'
-            hx-swap="none"
-            aria-pressed="{{ 'true' if led_mode == 'manual' else 'false' }}">
-      Manual
-    </button>
-    <button type="button"
-            class="btn btn--control{% if led_mode == 'off' %} btn--active{% endif %}"
-            hx-put="/api/plugins/led-control/mode"
-            hx-vals='{"mode": 5}'
-            hx-swap="none"
-            aria-pressed="{{ 'true' if led_mode == 'off' else 'false' }}">
-      Off
-    </button>
+  <!-- Colour picker (shown in manual/custom mode) — full CLI parity -->
+  {% if led_mode == 'manual' or led_mode == 'custom' %}
+  {% set hex_color = '#%02X%02X%02X' | format(led_color.red, led_color.green, led_color.blue) %}
+  <div class="colour-picker-component" id="colour-picker-component"
+       data-red="{{ led_color.red }}" data-green="{{ led_color.green }}" data-blue="{{ led_color.blue }}">
+
+    <!-- Row 1: Native colour picker + hex input -->
+    <div class="color-controls">
+      <label class="color-label" for="led-color-picker">Colour:</label>
+      <input type="color" id="led-color-picker"
+             class="color-picker"
+             value="{{ hex_color }}"
+             data-ws-command="set_led_color"
+             aria-label="LED colour picker">
+      <input type="text" id="led-hex-input"
+             class="hex-input mono"
+             value="{{ hex_color }}"
+             maxlength="7"
+             pattern="#[0-9A-Fa-f]{6}"
+             spellcheck="false"
+             data-ws-command="set_led_color"
+             aria-label="LED hex colour code">
+    </div>
+
+    <!-- Row 2: RGB sliders (matches CLI `casectl led color R G B`) -->
+    <div class="rgb-sliders" aria-label="RGB colour channels">
+      <div class="rgb-slider-row">
+        <label class="rgb-label rgb-label--red" for="led-slider-r">R</label>
+        <input type="range" id="led-slider-r" class="rgb-slider rgb-slider--red"
+               min="0" max="255" value="{{ led_color.red }}"
+               aria-label="Red channel">
+        <span class="rgb-value mono" id="led-value-r">{{ led_color.red }}</span>
+      </div>
+      <div class="rgb-slider-row">
+        <label class="rgb-label rgb-label--green" for="led-slider-g">G</label>
+        <input type="range" id="led-slider-g" class="rgb-slider rgb-slider--green"
+               min="0" max="255" value="{{ led_color.green }}"
+               aria-label="Green channel">
+        <span class="rgb-value mono" id="led-value-g">{{ led_color.green }}</span>
+      </div>
+      <div class="rgb-slider-row">
+        <label class="rgb-label rgb-label--blue" for="led-slider-b">B</label>
+        <input type="range" id="led-slider-b" class="rgb-slider rgb-slider--blue"
+               min="0" max="255" value="{{ led_color.blue }}"
+               aria-label="Blue channel">
+        <span class="rgb-value mono" id="led-value-b">{{ led_color.blue }}</span>
+      </div>
+    </div>
+
+    <!-- Row 3: Named colour presets (matches CLI `casectl led color <name>`) -->
+    <div class="colour-presets" aria-label="Named colour presets">
+      <div class="presets-grid">
+        <button type="button" class="preset-swatch" data-color-name="red"
+                style="--swatch: #FF0000" title="Red" aria-label="Red"></button>
+        <button type="button" class="preset-swatch" data-color-name="green"
+                style="--swatch: #00FF00" title="Green" aria-label="Green"></button>
+        <button type="button" class="preset-swatch" data-color-name="blue"
+                style="--swatch: #0000FF" title="Blue" aria-label="Blue"></button>
+        <button type="button" class="preset-swatch" data-color-name="white"
+                style="--swatch: #FFFFFF" title="White" aria-label="White"></button>
+        <button type="button" class="preset-swatch" data-color-name="yellow"
+                style="--swatch: #FFFF00" title="Yellow" aria-label="Yellow"></button>
+        <button type="button" class="preset-swatch" data-color-name="cyan"
+                style="--swatch: #00FFFF" title="Cyan" aria-label="Cyan"></button>
+        <button type="button" class="preset-swatch" data-color-name="magenta"
+                style="--swatch: #FF00FF" title="Magenta" aria-label="Magenta"></button>
+        <button type="button" class="preset-swatch" data-color-name="orange"
+                style="--swatch: #FFA500" title="Orange" aria-label="Orange"></button>
+        <button type="button" class="preset-swatch" data-color-name="pink"
+                style="--swatch: #FF69B4" title="Pink" aria-label="Pink"></button>
+        <button type="button" class="preset-swatch" data-color-name="purple"
+                style="--swatch: #800080" title="Purple" aria-label="Purple"></button>
+        <button type="button" class="preset-swatch" data-color-name="teal"
+                style="--swatch: #008080" title="Teal" aria-label="Teal"></button>
+        <button type="button" class="preset-swatch" data-color-name="coral"
+                style="--swatch: #FF7F50" title="Coral" aria-label="Coral"></button>
+        <button type="button" class="preset-swatch" data-color-name="gold"
+                style="--swatch: #FFD700" title="Gold" aria-label="Gold"></button>
+        <button type="button" class="preset-swatch" data-color-name="lime"
+                style="--swatch: #00FF00" title="Lime" aria-label="Lime"></button>
+        <button type="button" class="preset-swatch" data-color-name="navy"
+                style="--swatch: #000080" title="Navy" aria-label="Navy"></button>
+        <button type="button" class="preset-swatch" data-color-name="arctic-steel"
+                style="--swatch: #8AAAC4" title="Arctic Steel" aria-label="Arctic Steel"></button>
+      </div>
+    </div>
+
   </div>
+  {% endif %}
 
 </div>

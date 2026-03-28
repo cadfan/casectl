@@ -186,3 +186,9 @@ def test_websocket_connects() -> None:
     with client.websocket_connect("/api/ws") as ws:
         # Connection established -- just verify it does not raise
         assert event_bus.ws_count >= 0
+
+
+# ---------------------------------------------------------------------------
+# Tests: WebSocket OLED commands
+# ---------------------------------------------------------------------------
+

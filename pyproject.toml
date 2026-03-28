@@ -71,6 +71,9 @@ led-control = "casectl.plugins.led:LedControlPlugin"
 oled-display = "casectl.plugins.oled:OledDisplayPlugin"
 system-monitor = "casectl.plugins.monitor:SystemMonitorPlugin"
 prometheus = "casectl.plugins.prometheus:PrometheusPlugin"
+mqtt = "casectl.plugins.mqtt:MqttPlugin"
+automation = "casectl.plugins.automation:AutomationPlugin"
+alerting = "casectl.plugins.alerting:AlertingPlugin"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/casectl"]

@@ -241,6 +241,14 @@ class OledDisplayPlugin:
             config.screens[i].enabled if i < len(config.screens) else True
             for i in range(len(SCREEN_NAMES))
         ]
+        screen_display_times = [
+            config.screens[i].display_time if i < len(config.screens) else 5.0
+            for i in range(len(SCREEN_NAMES))
+        ]
+        # Time format from the clock screen (index 0).
+        time_format = (
+            config.screens[0].time_format if len(config.screens) > 0 else 0
+        )
 
         return {
             "current_screen": self._current_screen,
@@ -248,6 +256,8 @@ class OledDisplayPlugin:
             "screens_enabled": screens_enabled,
             "rotation": config.rotation,
             "degraded": self._degraded,
+            "screen_display_times": screen_display_times,
+            "time_format": time_format,
         }
 
     # ------------------------------------------------------------------

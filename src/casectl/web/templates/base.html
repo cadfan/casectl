@@ -92,6 +92,12 @@
     <p class="footer-text">casectl &mdash; Freenove FNK0107B case controller</p>
   </footer>
 
+  <!-- Real-time SSE push updates (falls back to HTMX polling) -->
+  <script src="/static/realtime.js"></script>
+
+  <!-- WebSocket client for bidirectional dashboard controls -->
+  <script src="/static/ws-controls.js"></script>
+
   {% block scripts_extra %}{% endblock %}
 </body>
 </html>

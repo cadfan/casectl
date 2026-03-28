@@ -94,40 +94,48 @@ async def _fetch_led_data(plugin_host: PluginHost) -> dict[str, Any]:
         return {"mode": "unknown", "color": {"red": 0, "green": 0, "blue": 0}, "degraded": False}
 
 
+def _oled_defaults() -> dict[str, Any]:
+    """Return default OLED data when the plugin is unavailable."""
+    return {
+        "current_screen": 0,
+        "screen_names": ["clock", "metrics", "temperature", "fan_duty"],
+        "screens_enabled": [True, True, True, True],
+        "rotation": 0,
+        "degraded": False,
+        "screen_display_times": [5.0, 5.0, 5.0, 5.0],
+        "time_format": 0,
+    }
+
+
 async def _fetch_oled_data(plugin_host: PluginHost) -> dict[str, Any]:
     """Fetch OLED status from the oled-display plugin."""
     plugin = plugin_host.get_plugin("oled-display")
     if plugin is None:
-        return {
-            "current_screen": 0,
-            "screen_names": ["clock", "metrics", "temperature", "fan_duty"],
-            "screens_enabled": [True, True, True, True],
-            "rotation": 0,
-            "degraded": False,
-        }
+        return _oled_defaults()
     try:
-        status = plugin.get_status()
-        # The plugin get_status() may not include screens_enabled; try the
-        # internal status accessor if the plugin exposes it.
+        # The internal status accessor includes screens_enabled and rotation.
         if hasattr(plugin, "_get_oled_status"):
             detailed = plugin._get_oled_status()
+            # Enrich with content settings for the web dashboard.
+            if "screen_display_times" not in detailed:
+                detailed["screen_display_times"] = [5.0, 5.0, 5.0, 5.0]
+            if "time_format" not in detailed:
+                detailed["time_format"] = 0
             return detailed
+
+        status = plugin.get_status()
         return {
             "current_screen": status.get("current_screen", 0),
             "screen_names": status.get("screen_names", ["clock", "metrics", "temperature", "fan_duty"]),
             "screens_enabled": status.get("screens_enabled", [True, True, True, True]),
             "rotation": status.get("rotation", 0),
             "degraded": status.get("degraded", False),
+            "screen_display_times": status.get("screen_display_times", [5.0, 5.0, 5.0, 5.0]),
+            "time_format": status.get("time_format", 0),
         }
     except Exception:
         logger.debug("Failed to fetch OLED data", exc_info=True)
-        return {
-            "current_screen": 0,
-            "screen_names": ["clock", "metrics", "temperature", "fan_duty"],
-            "screens_enabled": [True, True, True, True],
-            "rotation": 0,
-            "degraded": False,
-        }
+        return _oled_defaults()
 
 
 # ---------------------------------------------------------------------------
@@ -229,6 +237,9 @@ def create_web_router(plugin_host: PluginHost, config_manager: ConfigManager) ->
                 "oled_current_screen": oled.get("current_screen", 0),
                 "oled_screen_names": oled.get("screen_names", []),
                 "oled_screens_enabled": oled.get("screens_enabled", []),
+                "oled_rotation": oled.get("rotation", 0),
+                "oled_screen_display_times": oled.get("screen_display_times", []),
+                "oled_time_format": oled.get("time_format", 0),
             },
         )
 
@@ -289,6 +300,9 @@ def create_web_router(plugin_host: PluginHost, config_manager: ConfigManager) ->
                 "oled_current_screen": oled.get("current_screen", 0),
                 "oled_screen_names": oled.get("screen_names", []),
                 "oled_screens_enabled": oled.get("screens_enabled", []),
+                "oled_rotation": oled.get("rotation", 0),
+                "oled_screen_display_times": oled.get("screen_display_times", []),
+                "oled_time_format": oled.get("time_format", 0),
             },
         )
 

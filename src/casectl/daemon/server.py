@@ -320,12 +320,22 @@ def create_app(
         The request body must include a ``section`` key identifying the
         top-level config section to update, and a ``values`` dict of
         key-value pairs to merge into that section.
+
+        Emits a ``config.updated`` event on the EventBus after a successful
+        update so that SSE/WebSocket subscribers are notified immediately
+        (enabling <500 ms dashboard round-trip).
         """
         section = body.section
         if not section:
             raise HTTPException(status_code=400, detail="Missing 'section' key")
         try:
             updated = await config_manager.update(section, body.values)
+            # Emit config change event for real-time push to dashboards.
+            await event_bus.emit("config.updated", {
+                "section": section,
+                "values": body.values,
+                "ts": time.time(),
+            })
             return updated.model_dump(mode="json")
         except KeyError:
             raise HTTPException(status_code=404, detail="Unknown config section")
@@ -333,18 +343,361 @@ def create_app(
             logger.error("Failed to update config", exc_info=True)
             raise HTTPException(status_code=500, detail="Failed to update configuration")
 
+    # -- WebSocket command helpers ------------------------------------------
+
+    async def _handle_ws_command(websocket: WebSocket, raw: str) -> None:
+        """Parse and execute a WebSocket command message.
+
+        Accepted commands mirror the REST API so that the web dashboard has
+        full CLI parity over the WebSocket channel:
+
+        - ``{"command": "set_fan_mode", "mode": <int|str>}``
+        - ``{"command": "set_led_mode", "mode": <int|str>}``
+        - ``{"command": "set_led_color", "red": int, "green": int, "blue": int}``
+        - ``{"command": "set_fan_speed", "duty": [int, ...]}``
+        - ``{"command": "set_oled_screen", "index": int, "enabled": bool}``
+        - ``{"command": "set_oled_rotation", "rotation": 0|180}``
+        - ``{"command": "set_oled_power", "enabled": bool}``
+        - ``{"command": "set_oled_content", "screen_index": int, ...}``
+
+        Each command invokes the same ``config_manager.update()`` path used by
+        the REST API and CLI, ensuring behavioural parity across all interfaces.
+        """
+        import json as _json
+
+        try:
+            msg = _json.loads(raw)
+        except (ValueError, TypeError):
+            await websocket.send_text(_json.dumps({
+                "type": "error", "data": {"detail": "Invalid JSON"},
+            }))
+            return
+
+        if not isinstance(msg, dict) or "command" not in msg:
+            # Keep-alive / ping — silently ignore.
+            return
+
+        command = msg["command"]
+        try:
+            result = await _dispatch_ws_command(command, msg)
+            await websocket.send_text(_json.dumps({
+                "type": "command_result",
+                "data": {"command": command, "status": "ok", **result},
+            }))
+        except ValueError as exc:
+            await websocket.send_text(_json.dumps({
+                "type": "error",
+                "data": {"command": command, "detail": str(exc)},
+            }))
+        except Exception:
+            logger.error("WebSocket command %r failed", command, exc_info=True)
+            await websocket.send_text(_json.dumps({
+                "type": "error",
+                "data": {"command": command, "detail": "Internal server error"},
+            }))
+
+    async def _dispatch_ws_command(command: str, msg: dict[str, Any]) -> dict[str, Any]:
+        """Route a WebSocket command to the appropriate config_manager call.
+
+        Returns a result dict on success, raises ValueError on bad input.
+
+        Each command invokes ``config_manager.update()`` (the same path used
+        by the REST API and CLI) and then emits the appropriate event on the
+        :class:`~casectl.daemon.event_bus.EventBus` so that SSE clients and
+        other WebSocket subscribers receive real-time notifications.
+        """
+        from casectl.config.models import FanMode, LedMode
+
+        if command == "set_fan_mode":
+            mode_raw = msg.get("mode")
+            if mode_raw is None:
+                raise ValueError("Missing 'mode' parameter")
+            mode_val = _resolve_fan_mode(mode_raw)
+            await config_manager.update("fan", {"mode": mode_val})
+            mode_name = FanMode(mode_val).name.lower()
+            await event_bus.emit("fan.mode_changed", {
+                "mode": mode_name,
+                "mode_value": mode_val,
+                "source": "websocket",
+                "ts": time.time(),
+            })
+            return {"mode": mode_name}
+
+        elif command == "set_led_mode":
+            mode_raw = msg.get("mode")
+            if mode_raw is None:
+                raise ValueError("Missing 'mode' parameter")
+            mode_val = _resolve_led_mode(mode_raw)
+            await config_manager.update("led", {"mode": mode_val})
+            mode_name = LedMode(mode_val).name.lower()
+            await event_bus.emit("led.mode_changed", {
+                "mode": mode_name,
+                "mode_value": mode_val,
+                "source": "websocket",
+                "ts": time.time(),
+            })
+            return {"mode": mode_name}
+
+        elif command == "set_led_color":
+            red, green, blue = _resolve_led_color(msg)
+            await config_manager.update("led", {
+                "mode": LedMode.MANUAL.value,
+                "red_value": red,
+                "green_value": green,
+                "blue_value": blue,
+            })
+            await event_bus.emit("led.color_changed", {
+                "color": {"red": red, "green": green, "blue": blue},
+                "source": "websocket",
+                "ts": time.time(),
+            })
+            return {"color": {"red": red, "green": green, "blue": blue}}
+
+        elif command == "set_fan_speed":
+            duty = msg.get("duty")
+            if not isinstance(duty, list) or not (1 <= len(duty) <= 3):
+                raise ValueError("duty must be a list of 1-3 integers (0-100)")
+            hw_duty: list[int] = []
+            for d in duty:
+                if not isinstance(d, int) or not (0 <= d <= 100):
+                    raise ValueError("Each duty value must be 0-100")
+                hw_duty.append(int(d * 255 / 100))
+            while len(hw_duty) < 3:
+                hw_duty.append(hw_duty[-1] if hw_duty else 0)
+            await config_manager.update("fan", {
+                "mode": FanMode.MANUAL.value,
+                "manual_duty": hw_duty,
+            })
+            await event_bus.emit("fan.speed_changed", {
+                "duty_hw": hw_duty,
+                "source": "websocket",
+                "ts": time.time(),
+            })
+            return {"duty_hw": hw_duty}
+
+        # -- OLED commands --------------------------------------------------
+
+        elif command == "set_oled_screen":
+            index = msg.get("index")
+            enabled = msg.get("enabled")
+            if not isinstance(index, int) or not (0 <= index <= 3):
+                raise ValueError("index must be an integer 0-3")
+            if not isinstance(enabled, bool):
+                raise ValueError("enabled must be a boolean")
+
+            raw_oled = await config_manager.get("oled")
+            screens = raw_oled.get("screens", [])
+            if index >= len(screens):
+                raise ValueError(f"Screen index {index} out of range (0-{len(screens) - 1})")
+
+            screens[index]["enabled"] = enabled
+            await config_manager.update("oled", {"screens": screens})
+            await event_bus.emit("oled.screen_toggled", {
+                "index": index,
+                "enabled": enabled,
+                "source": "websocket",
+                "ts": time.time(),
+            })
+            return {"index": index, "enabled": enabled}
+
+        elif command == "set_oled_rotation":
+            rotation = msg.get("rotation")
+            if rotation not in (0, 180):
+                raise ValueError("rotation must be 0 or 180")
+
+            await config_manager.update("oled", {"rotation": rotation})
+            await event_bus.emit("oled.rotation_changed", {
+                "rotation": rotation,
+                "source": "websocket",
+                "ts": time.time(),
+            })
+            return {"rotation": rotation}
+
+        elif command == "set_oled_power":
+            enabled = msg.get("enabled")
+            if not isinstance(enabled, bool):
+                raise ValueError("enabled must be a boolean")
+
+            # Enable or disable all screens at once — matches CLI `casectl oled on/off`.
+            raw_oled = await config_manager.get("oled")
+            screens = raw_oled.get("screens", [])
+            for screen in screens:
+                screen["enabled"] = enabled
+            await config_manager.update("oled", {"screens": screens})
+            await event_bus.emit("oled.power_changed", {
+                "enabled": enabled,
+                "source": "websocket",
+                "ts": time.time(),
+            })
+            return {"enabled": enabled}
+
+        elif command == "set_oled_content":
+            screen_index = msg.get("screen_index")
+            if not isinstance(screen_index, int) or not (0 <= screen_index <= 3):
+                raise ValueError("screen_index must be an integer 0-3")
+
+            raw_oled = await config_manager.get("oled")
+            screens = raw_oled.get("screens", [])
+            if screen_index >= len(screens):
+                raise ValueError(
+                    f"Screen index {screen_index} out of range (0-{len(screens) - 1})"
+                )
+
+            # Apply optional per-screen content settings.
+            updated_screen = dict(screens[screen_index])
+            if "display_time" in msg:
+                dt = msg["display_time"]
+                if not isinstance(dt, (int, float)) or dt <= 0:
+                    raise ValueError("display_time must be a positive number")
+                updated_screen["display_time"] = float(dt)
+            if "time_format" in msg:
+                tf = msg["time_format"]
+                if tf not in (0, 1):
+                    raise ValueError("time_format must be 0 (24h) or 1 (12h)")
+                updated_screen["time_format"] = tf
+            if "date_format" in msg:
+                df = msg["date_format"]
+                if not isinstance(df, int) or df < 0:
+                    raise ValueError("date_format must be a non-negative integer")
+                updated_screen["date_format"] = df
+            if "interchange" in msg:
+                ic = msg["interchange"]
+                if not isinstance(ic, int) or ic < 0:
+                    raise ValueError("interchange must be a non-negative integer")
+                updated_screen["interchange"] = ic
+
+            screens[screen_index] = updated_screen
+            await config_manager.update("oled", {"screens": screens})
+            await event_bus.emit("oled.content_changed", {
+                "screen_index": screen_index,
+                "settings": updated_screen,
+                "source": "websocket",
+                "ts": time.time(),
+            })
+            return {"screen_index": screen_index, "settings": updated_screen}
+
+        else:
+            raise ValueError(f"Unknown command: {command}")
+
+    def _resolve_fan_mode(raw: int | str) -> int:
+        """Convert a fan mode name or integer to a valid FanMode int value."""
+        _FAN_NAMES = {
+            "follow-temp": 0, "follow_temp": 0,
+            "follow-rpi": 1, "follow_rpi": 1,
+            "manual": 2, "custom": 3, "off": 4,
+        }
+        if isinstance(raw, str):
+            val = _FAN_NAMES.get(raw.lower())
+            if val is None:
+                raise ValueError(f"Unknown fan mode: {raw}")
+            return val
+        if isinstance(raw, int) and raw in range(5):
+            return raw
+        raise ValueError(f"Invalid fan mode: {raw}")
+
+    def _resolve_led_mode(raw: int | str) -> int:
+        """Convert an LED mode name or integer to a valid LedMode int value."""
+        _LED_NAMES = {
+            "rainbow": 0, "breathing": 1,
+            "follow-temp": 2, "follow_temp": 2,
+            "manual": 3, "custom": 4, "off": 5,
+        }
+        if isinstance(raw, str):
+            val = _LED_NAMES.get(raw.lower())
+            if val is None:
+                raise ValueError(f"Unknown LED mode: {raw}")
+            return val
+        if isinstance(raw, int) and raw in range(6):
+            return raw
+        raise ValueError(f"Invalid LED mode: {raw}")
+
+    # Named colour map — matches CLI `casectl led color <name>` and
+    # the REST API's _COLOR_NAMES in led/routes.py.
+    _WS_COLOR_NAMES: dict[str, tuple[int, int, int]] = {
+        "red": (255, 0, 0),
+        "green": (0, 255, 0),
+        "blue": (0, 0, 255),
+        "white": (255, 255, 255),
+        "yellow": (255, 255, 0),
+        "cyan": (0, 255, 255),
+        "magenta": (255, 0, 255),
+        "orange": (255, 165, 0),
+        "pink": (255, 105, 180),
+        "purple": (128, 0, 128),
+        "teal": (0, 128, 128),
+        "coral": (255, 127, 80),
+        "gold": (255, 215, 0),
+        "lime": (0, 255, 0),
+        "navy": (0, 0, 128),
+        "arctic-steel": (138, 170, 196),
+    }
+
+    def _resolve_led_color(msg: dict[str, Any]) -> tuple[int, int, int]:
+        """Resolve LED colour from a WebSocket message.
+
+        Supports three input formats matching the CLI:
+
+        1. **Named colour**: ``{"color_name": "red"}``
+        2. **Hex code**: ``{"hex": "#FF0080"}``
+        3. **RGB values**: ``{"red": 255, "green": 0, "blue": 128}``
+
+        Returns a (red, green, blue) tuple.  Raises ``ValueError`` on
+        invalid input.
+        """
+        # 1. Named colour (highest priority — matches `casectl led color red`)
+        color_name = msg.get("color_name")
+        if color_name and isinstance(color_name, str):
+            rgb = _WS_COLOR_NAMES.get(color_name.lower())
+            if rgb is None:
+                raise ValueError(
+                    f"Unknown colour name: {color_name}. "
+                    f"Valid: {', '.join(sorted(_WS_COLOR_NAMES))}"
+                )
+            return rgb
+
+        # 2. Hex code (matches `casectl led color #FF0080`)
+        hex_code = msg.get("hex")
+        if hex_code and isinstance(hex_code, str):
+            hex_str = hex_code.lstrip("#")
+            if len(hex_str) != 6:
+                raise ValueError(f"Hex colour must be 6 digits, got: {hex_code}")
+            try:
+                r = int(hex_str[0:2], 16)
+                g = int(hex_str[2:4], 16)
+                b = int(hex_str[4:6], 16)
+                return (r, g, b)
+            except ValueError:
+                raise ValueError(f"Invalid hex colour: {hex_code}")
+
+        # 3. RGB values (matches `casectl led color 255 0 128`)
+        red = msg.get("red", 0)
+        green = msg.get("green", 0)
+        blue = msg.get("blue", 0)
+        for name, val in [("red", red), ("green", green), ("blue", blue)]:
+            if not isinstance(val, int) or not (0 <= val <= 255):
+                raise ValueError(f"{name} must be an integer 0-255")
+        return (red, green, blue)
+
     # -- WebSocket ----------------------------------------------------------
 
     @app.websocket("/api/ws")
     async def websocket_endpoint(websocket: WebSocket) -> None:
-        """Real-time event stream over WebSocket.
+        """Bidirectional WebSocket for real-time events and dashboard commands.
 
-        Clients connect and receive JSON frames for every event emitted on the
-        :class:`~casectl.daemon.event_bus.EventBus`.  Client-to-server messages
-        are accepted (for keep-alive) but ignored.
+        **Server → Client:** JSON frames for every event emitted on the
+        :class:`~casectl.daemon.event_bus.EventBus`.
 
-        If the maximum number of WebSocket subscribers has been reached the
-        connection is rejected with close code ``1008`` (Policy Violation).
+        **Client → Server:** JSON command messages that invoke the same core
+        functions as the CLI and REST API, providing full CLI parity over the
+        WebSocket channel.  Supported commands:
+
+        - ``{"command": "set_fan_mode", "mode": <int|str>}``
+        - ``{"command": "set_led_mode", "mode": <int|str>}``
+        - ``{"command": "set_led_color", "red": int, "green": int, "blue": int}``
+        - ``{"command": "set_fan_speed", "duty": [int, ...]}``
+
+        Non-command messages (no ``"command"`` key) are treated as keep-alive
+        pings and silently ignored.
 
         Authentication is required when the daemon has an API token.
         Pass the token as a query parameter: ``ws://host:port/api/ws?token=...``
@@ -368,8 +721,8 @@ def create_app(
 
         try:
             while True:
-                # Keep the connection alive; ignore any client-sent messages.
-                await websocket.receive_text()
+                raw = await websocket.receive_text()
+                await _handle_ws_command(websocket, raw)
         except WebSocketDisconnect:
             logger.debug("WebSocket client disconnected normally")
         except Exception:
@@ -390,6 +743,17 @@ def create_app(
     for prefix, router in plugin_host.get_routes():
         app.include_router(router, prefix=prefix)
         logger.debug("Mounted plugin routes at %s", prefix)
+
+    # -- Mount SSE real-time endpoint ----------------------------------------
+    try:
+        from casectl.web.sse import create_sse_router
+
+        sse_router, sse_manager = create_sse_router(event_bus)
+        app.include_router(sse_router)
+        app.state.sse_manager = sse_manager
+        logger.info("SSE real-time endpoint mounted at /api/sse")
+    except Exception:
+        logger.warning("Failed to mount SSE endpoint", exc_info=True)
 
     # -- Mount web dashboard ------------------------------------------------
     try:

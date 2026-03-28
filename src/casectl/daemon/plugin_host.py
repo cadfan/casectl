@@ -35,6 +35,7 @@ _BUILTIN_PLUGINS: list[tuple[str, str]] = [
     ("casectl.plugins.oled", "OledDisplayPlugin"),
     ("casectl.plugins.monitor", "SystemMonitorPlugin"),
     ("casectl.plugins.prometheus", "PrometheusPlugin"),
+    ("casectl.plugins.alerting", "AlertingPlugin"),
 ]
 
 
@@ -327,6 +328,9 @@ class PluginHost:
         Exceptions are caught per-plugin so that one failing plugin does not
         prevent others from starting.  Also starts a watchdog task that
         monitors plugin health and restarts crashed tasks.
+
+        After all plugins are started, cross-plugin wiring is performed
+        (e.g. alerting plugin registers its handler on the automation engine).
         """
         self._stopped = False
         for name, plugin in self._plugins.items():
@@ -346,10 +350,45 @@ class PluginHost:
                 )
                 self._plugin_statuses[name] = PluginStatus.ERROR
 
+        # Cross-plugin wiring: alerting → automation action registry
+        self._wire_alerting_to_automation()
+
         # Start watchdog to detect and restart crashed plugin tasks.
         self._watchdog_task = asyncio.create_task(
             self._watchdog_loop(), name="plugin-watchdog",
         )
+
+    def _wire_alerting_to_automation(self) -> None:
+        """Wire the alerting plugin's handler onto the automation action registry.
+
+        If both ``alerting`` and ``automation`` plugins are loaded and healthy,
+        the alerting plugin's ``_handle_alert_action`` replaces the default
+        event-bus-based ``alert`` handler with a direct dispatch that bypasses
+        the event bus for lower latency.
+        """
+        alerting = self._plugins.get("alerting")
+        automation = self._plugins.get("automation")
+
+        if alerting is None or automation is None:
+            return
+
+        if (
+            self._plugin_statuses.get("alerting") == PluginStatus.ERROR
+            or self._plugin_statuses.get("automation") == PluginStatus.ERROR
+        ):
+            return
+
+        try:
+            # The automation plugin exposes its action_registry
+            registry = getattr(automation, "action_registry", None)
+            if registry is not None and hasattr(alerting, "register_alert_handler"):
+                alerting.register_alert_handler(registry)
+                logger.info("Wired alerting plugin to automation action registry")
+        except Exception:
+            logger.warning(
+                "Failed to wire alerting → automation:\n%s",
+                traceback.format_exc(),
+            )
 
     async def _watchdog_loop(self) -> None:
         """Periodically check plugin status and restart crashed tasks."""
