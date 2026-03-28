@@ -38,11 +38,46 @@ def configure(get_status: Any, get_config: Any) -> None:
 # ---------------------------------------------------------------------------
 
 
+_COLOR_NAMES: dict[str, tuple[int, int, int]] = {
+    "red": (255, 0, 0),
+    "green": (0, 255, 0),
+    "blue": (0, 0, 255),
+    "white": (255, 255, 255),
+    "yellow": (255, 255, 0),
+    "cyan": (0, 255, 255),
+    "magenta": (255, 0, 255),
+    "orange": (255, 165, 0),
+    "pink": (255, 105, 180),
+    "purple": (128, 0, 128),
+    "teal": (0, 128, 128),
+    "coral": (255, 127, 80),
+    "gold": (255, 215, 0),
+    "lime": (0, 255, 0),
+    "navy": (0, 0, 128),
+    "arctic-steel": (138, 170, 196),
+}
+
+# Reverse lookup: (r, g, b) -> name
+_RGB_TO_NAME: dict[tuple[int, int, int], str] = {v: k for k, v in _COLOR_NAMES.items()}
+
+
+def _rgb_to_hex(r: int, g: int, b: int) -> str:
+    """Convert RGB values to a hex colour string."""
+    return f"#{r:02X}{g:02X}{b:02X}"
+
+
+def _rgb_to_name(r: int, g: int, b: int) -> str | None:
+    """Return the named colour if RGB matches, else None."""
+    return _RGB_TO_NAME.get((r, g, b))
+
+
 class LedStatusResponse(BaseModel):
     """Response model for GET /status."""
 
     mode: str = Field(description="Current LED mode name")
     color: dict[str, int] = Field(description="Current RGB colour values")
+    hex: str = Field(description="Hex colour code (e.g. #FF0080)")
+    color_name: str | None = Field(default=None, description="Named colour if one matches")
     degraded: bool = Field(description="Whether the controller is degraded")
 
 
@@ -82,9 +117,13 @@ async def led_status() -> LedStatusResponse:
         raise HTTPException(status_code=503, detail="LED controller not initialised")
 
     status = _get_status()
+    color = status.get("color", {"red": 0, "green": 0, "blue": 0})
+    r, g, b = color.get("red", 0), color.get("green", 0), color.get("blue", 0)
     return LedStatusResponse(
         mode=status.get("mode", "unknown"),
-        color=status.get("color", {"red": 0, "green": 0, "blue": 0}),
+        color=color,
+        hex=_rgb_to_hex(r, g, b),
+        color_name=_rgb_to_name(r, g, b),
         degraded=status.get("degraded", False),
     )
 

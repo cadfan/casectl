@@ -273,9 +273,16 @@ def led_status(ctx: click.Context) -> None:
 
     color = data.get("color", {})
     r, g, b = color.get("red", 0), color.get("green", 0), color.get("blue", 0)
-    color_text = Text(f"rgb({r}, {g}, {b})")
-    color_text.stylize(f"on rgb({r},{g},{b})")
-    table.add_row("Color", color_text)
+
+    hex_code = data.get("hex", f"#{r:02X}{g:02X}{b:02X}")
+    color_name = data.get("color_name")
+
+    color_swatch = Text(f"  {hex_code}  ")
+    color_swatch.stylize(f"on rgb({r},{g},{b})")
+    table.add_row("Hex", color_swatch)
+    table.add_row("RGB", f"rgb({r}, {g}, {b})")
+    if color_name:
+        table.add_row("Name", color_name)
 
     degraded = data.get("degraded", False)
     table.add_row(
