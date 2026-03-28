@@ -106,14 +106,14 @@ class TestSetFanMode:
             resp = client.post("/mode", json={"mode": mode_val})
             assert resp.status_code == 200, f"mode={mode_val} should be valid"
 
-    def test_set_fan_mode_invalid_returns_400(self):
-        """Invalid mode values should be rejected."""
+    def test_set_fan_mode_invalid_returns_422(self):
+        """Invalid mode values should be rejected by Pydantic validator."""
         client, *_ = _make_client()
         resp = client.post("/mode", json={"mode": 99})
-        assert resp.status_code == 400
+        assert resp.status_code == 422  # integer out of range
 
         resp = client.post("/mode", json={"mode": "turbo"})
-        assert resp.status_code == 422  # Pydantic validator rejects unknown string
+        assert resp.status_code == 422  # unknown string name
 
     def test_set_fan_mode_503_when_not_configured(self):
         """If _get_config is None, we get a 503."""

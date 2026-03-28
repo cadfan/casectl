@@ -59,11 +59,13 @@ class SetFanModeRequest(BaseModel):
     @field_validator("mode")
     @classmethod
     def validate_mode(cls, v):
+        names = {"follow-temp": 0, "follow_temp": 0, "follow-rpi": 1, "follow_rpi": 1, "manual": 2, "custom": 3, "off": 4}
         if isinstance(v, str):
-            names = {"follow-temp": 0, "follow_temp": 0, "follow-rpi": 1, "follow_rpi": 1, "manual": 2, "custom": 3, "off": 4}
             if v.lower() in names:
                 return names[v.lower()]
             raise ValueError(f"Unknown mode: {v}. Valid: {', '.join(names)}")
+        if isinstance(v, int) and v not in range(5):
+            raise ValueError(f"Mode must be 0-4, got {v}")
         return v
 
 

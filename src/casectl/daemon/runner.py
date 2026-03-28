@@ -379,7 +379,7 @@ async def run_daemon(
     actual_port: int = port if port is not None else config.service.api_port
 
     app = create_app(plugin_host, config_manager, event_bus, host=actual_host,
-                      trust_proxy=config.service.trust_proxy)
+                      port=actual_port, trust_proxy=config.service.trust_proxy)
 
     # -- 7. Uvicorn server --------------------------------------------------
     uvi_config = uvicorn.Config(

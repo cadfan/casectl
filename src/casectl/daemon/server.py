@@ -248,8 +248,8 @@ def create_app(
         _origins = [
             f"http://{host}:{port}",
             f"https://{host}:{port}",
-            "http://127.0.0.1:8420",
-            "http://localhost:8420",
+            f"http://127.0.0.1:{port}",
+            f"http://localhost:{port}",
         ]
         app.add_middleware(
             CORSMiddleware,
@@ -356,6 +356,7 @@ def create_app(
             if client_host not in ("127.0.0.1", "::1", "localhost"):
                 ws_token = websocket.query_params.get("token", "")
                 if not ws_token or not secrets.compare_digest(ws_token, ws_api_token):
+                    await websocket.accept()
                     await websocket.close(code=1008, reason="Authentication required")
                     return
 

@@ -89,11 +89,13 @@ class SetLedModeRequest(BaseModel):
     @field_validator("mode")
     @classmethod
     def validate_mode(cls, v):
+        names = {"rainbow": 0, "breathing": 1, "follow-temp": 2, "follow_temp": 2, "manual": 3, "custom": 4, "off": 5}
         if isinstance(v, str):
-            names = {"rainbow": 0, "breathing": 1, "follow-temp": 2, "follow_temp": 2, "manual": 3, "custom": 4, "off": 5}
             if v.lower() in names:
                 return names[v.lower()]
             raise ValueError(f"Unknown mode: {v}. Valid: {', '.join(names)}")
+        if isinstance(v, int) and v not in range(6):
+            raise ValueError(f"Mode must be 0-5, got {v}")
         return v
 
 
