@@ -9,7 +9,7 @@ import logging
 from typing import TYPE_CHECKING, Annotated, Any
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 if TYPE_CHECKING:
     from casectl.plugins.fan.controller import FanController
@@ -54,7 +54,17 @@ class FanStatusResponse(BaseModel):
 class SetFanModeRequest(BaseModel):
     """Request body for POST /mode."""
 
-    mode: int = Field(ge=0, le=4, description="Fan mode enum value (0-4)")
+    mode: int | str = Field(description="Fan mode (0-4 or name: follow-temp, follow-rpi, manual, custom, off)")
+
+    @field_validator("mode")
+    @classmethod
+    def validate_mode(cls, v):
+        if isinstance(v, str):
+            names = {"follow-temp": 0, "follow_temp": 0, "follow-rpi": 1, "follow_rpi": 1, "manual": 2, "custom": 3, "off": 4}
+            if v.lower() in names:
+                return names[v.lower()]
+            raise ValueError(f"Unknown mode: {v}. Valid: {', '.join(names)}")
+        return v
 
 
 class SetFanSpeedRequest(BaseModel):
@@ -79,8 +89,8 @@ async def fan_status() -> FanStatusResponse:
         raise HTTPException(status_code=503, detail="Fan controller not initialised")
 
     # Read RPM and temp via public controller methods.
-    rpm: list[int] = _controller.get_motor_speeds()
-    temp: float = _controller.get_cpu_temperature()
+    rpm: list[int] = await _controller.get_motor_speeds()
+    temp: float = await _controller.get_cpu_temperature()
 
     return FanStatusResponse(
         mode=_controller.current_mode.name.lower(),

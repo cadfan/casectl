@@ -27,8 +27,8 @@ def _make_client():
     controller.current_mode = FanMode.FOLLOW_TEMP
     controller.current_duty = [75, 75, 75]
     controller.degraded = False
-    controller.get_motor_speeds = MagicMock(return_value=[2400, 1800, 1800])
-    controller.get_cpu_temperature = MagicMock(return_value=52.3)
+    controller.get_motor_speeds = AsyncMock(return_value=[2400, 1800, 1800])
+    controller.get_cpu_temperature = AsyncMock(return_value=52.3)
 
     config_manager = AsyncMock()
     config_manager.update = AsyncMock()
@@ -106,14 +106,14 @@ class TestSetFanMode:
             resp = client.post("/mode", json={"mode": mode_val})
             assert resp.status_code == 200, f"mode={mode_val} should be valid"
 
-    def test_set_fan_mode_invalid_returns_422(self):
-        """Values outside the ge=0, le=4 constraint should be rejected by Pydantic."""
+    def test_set_fan_mode_invalid_returns_400(self):
+        """Invalid mode values should be rejected."""
         client, *_ = _make_client()
-        resp = client.post("/mode", json={"mode": 5})
-        assert resp.status_code == 422
+        resp = client.post("/mode", json={"mode": 99})
+        assert resp.status_code == 400
 
-        resp = client.post("/mode", json={"mode": -1})
-        assert resp.status_code == 422
+        resp = client.post("/mode", json={"mode": "turbo"})
+        assert resp.status_code == 422  # Pydantic validator rejects unknown string
 
     def test_set_fan_mode_503_when_not_configured(self):
         """If _get_config is None, we get a 503."""

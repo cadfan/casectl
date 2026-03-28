@@ -100,16 +100,16 @@ class FanController:
     # Public accessors
     # ------------------------------------------------------------------
 
-    def get_motor_speeds(self) -> list[int]:
+    async def get_motor_speeds(self) -> list[int]:
         """Return current motor RPM readings, or [0,0,0] if unavailable."""
         if self._expansion is None or not self._expansion.connected:
             return [0, 0, 0]
         try:
-            return self._expansion.get_motor_speed()
+            return await self._expansion.async_get_motor_speed()
         except OSError:
             return [0, 0, 0]
 
-    def get_cpu_temperature(self) -> float:
+    async def get_cpu_temperature(self) -> float:
         """Return current CPU temperature."""
         return self._get_cpu_temp()
 

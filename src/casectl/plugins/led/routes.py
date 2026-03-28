@@ -9,7 +9,7 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +49,17 @@ class LedStatusResponse(BaseModel):
 class SetLedModeRequest(BaseModel):
     """Request body for POST /mode."""
 
-    mode: int = Field(ge=0, le=5, description="LED mode enum value (0-5)")
+    mode: int | str = Field(description="LED mode (0-5 or name: rainbow, breathing, follow-temp, manual, custom, off)")
+
+    @field_validator("mode")
+    @classmethod
+    def validate_mode(cls, v):
+        if isinstance(v, str):
+            names = {"rainbow": 0, "breathing": 1, "follow-temp": 2, "follow_temp": 2, "manual": 3, "custom": 4, "off": 5}
+            if v.lower() in names:
+                return names[v.lower()]
+            raise ValueError(f"Unknown mode: {v}. Valid: {', '.join(names)}")
+        return v
 
 
 class SetLedColorRequest(BaseModel):

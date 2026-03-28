@@ -38,6 +38,8 @@ class OledDevice:
         representing 0, 90, 180, 270 degree rotations).
     """
 
+    MAX_CONSECUTIVE_ERRORS: int = 3
+
     def __init__(
         self,
         bus: int = 1,
@@ -46,6 +48,7 @@ class OledDevice:
     ) -> None:
         self._available: bool = False
         self._device: ssd1306 | None = None  # type: ignore[name-defined]
+        self._consecutive_errors: int = 0
 
         if not _luma_available:
             logger.warning(
@@ -124,9 +127,22 @@ class OledDevice:
 
         try:
             self._device.display(image)
+            self._consecutive_errors = 0
+            self._available = True
         except Exception:
-            logger.warning("Failed to render image to OLED", exc_info=True)
-            self._available = False
+            self._consecutive_errors += 1
+            if self._consecutive_errors >= self.MAX_CONSECUTIVE_ERRORS:
+                logger.error(
+                    "OLED marked unavailable after %d consecutive errors",
+                    self._consecutive_errors,
+                )
+                self._available = False
+            else:
+                logger.warning(
+                    "OLED render error %d/%d",
+                    self._consecutive_errors,
+                    self.MAX_CONSECUTIVE_ERRORS,
+                )
 
     async def async_render_image(self, image: Image.Image) -> None:
         """Async wrapper for :meth:`render_image`."""

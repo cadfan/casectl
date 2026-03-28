@@ -75,12 +75,8 @@ class BasicAuthMiddleware(BaseHTTPMiddleware):
             if client_host in ("127.0.0.1", "::1", "localhost"):
                 return await call_next(request)
 
-        # Allow WebSocket upgrade without auth header (handled at WS level)
-        if request.url.path == "/api/ws":
-            return await call_next(request)
-
-        # Allow static assets and HTMX partials without auth
-        if request.url.path.startswith("/static/") or request.url.path.startswith("/w/"):
+        # Allow static assets without auth (CSS/JS only)
+        if request.url.path.startswith("/static/"):
             return await call_next(request)
 
         # Check query parameter first (for browser access — avoids Basic Auth prompt)
@@ -179,6 +175,7 @@ def create_app(
     config_manager: ConfigManager,
     event_bus: EventBus,
     host: str = "127.0.0.1",
+    port: int = 8420,
     trust_proxy: bool = False,
 ) -> FastAPI:
     """Build and return a fully-configured :class:`FastAPI` application.
@@ -235,20 +232,8 @@ def create_app(
         lifespan=_lifespan,
     )
 
-    # -- CORS ---------------------------------------------------------------
-    # casectl is a local-network appliance; open CORS makes it easy for
-    # dashboards and SPAs served from any origin to talk to the API.
-
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-
     # -- Authentication -----------------------------------------------------
     # Auto-generates a token when bound to 0.0.0.0 (LAN access).
-    # Token is logged to stdout so the user can see it.
 
     api_token = _resolve_api_token(host)
     if api_token:
@@ -256,6 +241,31 @@ def create_app(
         app.state.api_token = api_token
     else:
         app.state.api_token = None
+
+    # -- CORS ---------------------------------------------------------------
+    if api_token:
+        # LAN mode: restrict origins to the daemon's own address.
+        _origins = [
+            f"http://{host}:{port}",
+            f"https://{host}:{port}",
+            "http://127.0.0.1:8420",
+            "http://localhost:8420",
+        ]
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=_origins,
+            allow_methods=["*"],
+            allow_headers=["*"],
+            allow_credentials=True,
+        )
+    else:
+        # Localhost only: open CORS is acceptable.
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=["*"],
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
 
     # -- Request timing -----------------------------------------------------
 
@@ -272,6 +282,7 @@ def create_app(
             "status": "running",
             "uptime": int(time.time() - start_time),
             "version": _DAEMON_VERSION,
+            "api_version": "0.1",
             "plugins": plugin_host.list_plugins(),
         }
 
@@ -334,7 +345,20 @@ def create_app(
 
         If the maximum number of WebSocket subscribers has been reached the
         connection is rejected with close code ``1008`` (Policy Violation).
+
+        Authentication is required when the daemon has an API token.
+        Pass the token as a query parameter: ``ws://host:port/api/ws?token=...``
         """
+        # Authenticate WebSocket if token is set.
+        ws_api_token = getattr(app.state, "api_token", None)
+        if ws_api_token:
+            client_host = websocket.client.host if websocket.client else ""
+            if client_host not in ("127.0.0.1", "::1", "localhost"):
+                ws_token = websocket.query_params.get("token", "")
+                if not ws_token or not secrets.compare_digest(ws_token, ws_api_token):
+                    await websocket.close(code=1008, reason="Authentication required")
+                    return
+
         await websocket.accept()
         if not event_bus.add_ws_subscriber(websocket):
             await websocket.close(code=1008, reason="Too many connections")

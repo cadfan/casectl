@@ -12,6 +12,7 @@ Discovery sources:
 
 from __future__ import annotations
 
+import asyncio
 import importlib
 import logging
 import traceback
@@ -115,6 +116,8 @@ class PluginHost:
         self._contexts: dict[str, PluginContext] = {}
         self._routes: dict[str, APIRouter] = {}  # prefix -> router
         self._plugin_statuses: dict[str, PluginStatus] = {}
+        self._stopped: bool = False
+        self._watchdog_task: asyncio.Task[None] | None = None
 
     # ------------------------------------------------------------------
     # Discovery & loading
@@ -304,8 +307,10 @@ class PluginHost:
         """Call ``start()`` on every loaded plugin.
 
         Exceptions are caught per-plugin so that one failing plugin does not
-        prevent others from starting.
+        prevent others from starting.  Also starts a watchdog task that
+        monitors plugin health and restarts crashed tasks.
         """
+        self._stopped = False
         for name, plugin in self._plugins.items():
             if self._plugin_statuses.get(name) == PluginStatus.ERROR:
                 logger.debug("Skipping start for errored plugin %r", name)
@@ -323,11 +328,55 @@ class PluginHost:
                 )
                 self._plugin_statuses[name] = PluginStatus.ERROR
 
+        # Start watchdog to detect and restart crashed plugin tasks.
+        self._watchdog_task = asyncio.create_task(
+            self._watchdog_loop(), name="plugin-watchdog",
+        )
+
+    async def _watchdog_loop(self) -> None:
+        """Periodically check plugin status and restart crashed tasks."""
+        while True:
+            await asyncio.sleep(10)
+            for name, plugin in self._plugins.items():
+                prev_status = self._plugin_statuses.get(name)
+                if prev_status == PluginStatus.ERROR:
+                    continue  # don't restart plugins that failed setup
+
+                try:
+                    status = plugin.get_status()
+                except Exception:
+                    continue
+
+                if isinstance(status, dict):
+                    s = status.get("status")
+                    if s == PluginStatus.STOPPED and prev_status == PluginStatus.HEALTHY:
+                        logger.warning("Plugin %r task died — restarting", name)
+                        try:
+                            await plugin.start()
+                            self._plugin_statuses[name] = PluginStatus.HEALTHY
+                            logger.info("Plugin %r restarted successfully", name)
+                        except Exception:
+                            logger.error("Failed to restart plugin %r", name, exc_info=True)
+                            self._plugin_statuses[name] = PluginStatus.ERROR
+
     async def stop_all(self) -> None:
         """Call ``stop()`` on every loaded plugin in reverse load order.
 
-        Exceptions are caught per-plugin.
+        Guarded against double execution. Exceptions are caught per-plugin.
         """
+        if self._stopped:
+            return
+        self._stopped = True
+
+        # Cancel the watchdog first.
+        if self._watchdog_task is not None and not self._watchdog_task.done():
+            self._watchdog_task.cancel()
+            try:
+                await self._watchdog_task
+            except asyncio.CancelledError:
+                pass
+            self._watchdog_task = None
+
         for name in reversed(list(self._plugins.keys())):
             plugin = self._plugins[name]
             try:

@@ -246,6 +246,8 @@ async def test_start_all_calls_start(host: PluginHost) -> None:
     assert p1.start_called is True
     assert p2.start_called is True
 
+    await host.stop_all()  # clean up watchdog
+
 
 async def test_start_all_skips_errored(host: PluginHost) -> None:
     """start_all() skips plugins in ERROR status."""
@@ -255,6 +257,8 @@ async def test_start_all_skips_errored(host: PluginHost) -> None:
 
     # The exploding plugin should still be ERROR, not HEALTHY
     assert host._plugin_statuses["exploding"] == PluginStatus.ERROR
+
+    await host.stop_all()  # clean up watchdog
 
 
 async def test_stop_all_reverse_order(host: PluginHost) -> None:

@@ -131,7 +131,7 @@ class TestRenderImage:
             importlib.reload(oled_mod)
 
     def test_render_image_failure_sets_unavailable(self) -> None:
-        """When device.display raises, available becomes False."""
+        """After MAX_CONSECUTIVE_ERRORS failures, available becomes False."""
         mock_i2c = MagicMock()
         mock_ssd1306 = MagicMock()
         mock_device_instance = MagicMock()
@@ -144,6 +144,9 @@ class TestRenderImage:
             assert oled.available is True
 
             fake_image = MagicMock()
+            for _ in range(oled.MAX_CONSECUTIVE_ERRORS - 1):
+                oled.render_image(fake_image)
+                assert oled.available is True
             oled.render_image(fake_image)
             assert oled.available is False
         finally:

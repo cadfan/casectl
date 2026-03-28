@@ -17,10 +17,13 @@ plain Linux host with no I2C devices attached.
 from __future__ import annotations
 
 import asyncio
+import fcntl
 import logging
+import os
 import signal
 import sys
-from typing import TYPE_CHECKING
+from pathlib import Path
+from typing import IO, TYPE_CHECKING
 
 import uvicorn
 
@@ -30,6 +33,23 @@ if TYPE_CHECKING:
     from casectl.hardware.oled import OledDevice
 
 logger = logging.getLogger(__name__)
+
+_LOCK_PATH = Path.home() / ".config" / "casectl" / "daemon.pid"
+
+
+def _acquire_lock() -> IO[str]:
+    """Acquire exclusive PID lock. Raises SystemExit if already held."""
+    _LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
+    lock_file = open(_LOCK_PATH, "w")  # noqa: SIM115
+    try:
+        fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        lock_file.close()
+        raise SystemExit("Another casectl daemon is already running.")
+    lock_file.write(str(os.getpid()))
+    lock_file.flush()
+    return lock_file
+
 
 # ---------------------------------------------------------------------------
 # Version
@@ -277,7 +297,10 @@ async def run_daemon(
     log_level:
         Logging level name (``"debug"``, ``"info"``, ``"warning"``, etc.).
     """
-    # -- 0. Logging ---------------------------------------------------------
+    # -- 0. PID lock --------------------------------------------------------
+    lock_file = _acquire_lock()
+
+    # -- 0a. Logging --------------------------------------------------------
     numeric_level: int = getattr(logging, log_level.upper(), logging.INFO)
     _configure_logging(level=numeric_level)
 
