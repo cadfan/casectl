@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 try:
     from casectl import __version__ as _DAEMON_VERSION
 except ImportError:
-    _DAEMON_VERSION = "0.1.0"
+    _DAEMON_VERSION = "0.2.0"
 
 
 # ---------------------------------------------------------------------------
@@ -282,7 +282,7 @@ def create_app(
             "status": "running",
             "uptime": int(time.time() - start_time),
             "version": _DAEMON_VERSION,
-            "api_version": "0.1",
+            "api_version": "0.2",
             "plugins": plugin_host.list_plugins(),
         }
 
@@ -304,6 +304,10 @@ def create_app(
             data = await config_manager.get(section)
             if section == "alerts" and isinstance(data, dict):
                 data = {**data, "smtp_password": "***"} if "smtp_password" in data else data
+            if section == "mqtt" and isinstance(data, dict):
+                data = {**data, "password": "***"} if "password" in data and data["password"] else data
+            if section == "alerts" and isinstance(data, dict):
+                data = {**data, "ntfy_token": "***"} if "ntfy_token" in data and data["ntfy_token"] else data
             return data
         except KeyError as exc:
             from fastapi.responses import JSONResponse

@@ -288,6 +288,14 @@ class AlertConfig(BaseModel):
 
     # -- Webhook channel ---
     webhook_url: str = Field(default="", description="HTTP(S) webhook URL for alerts")
+
+    @field_validator("webhook_url")
+    @classmethod
+    def _validate_webhook_url(cls, v: str) -> str:
+        if v and not v.startswith(("http://", "https://")):
+            msg = "webhook_url must use http:// or https:// scheme"
+            raise ValueError(msg)
+        return v
     webhook_method: str = Field(
         default="POST",
         description="HTTP method for webhook (POST or PUT)",
