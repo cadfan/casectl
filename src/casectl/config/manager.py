@@ -11,6 +11,7 @@ import asyncio
 import logging
 import os
 import shutil
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -257,14 +258,39 @@ class ConfigManager:
         """Create the config directory tree if it doesn't exist."""
         self._path.parent.mkdir(parents=True, exist_ok=True)
 
-    def _backup(self) -> None:
-        """Copy the current config file to ``config.yaml.bak``."""
-        bak = self._path.with_suffix(".yaml.bak")
+    def _backup(self, *, max_backups: int = 3) -> None:
+        """Copy the current config file to a timestamped ``.bak`` file.
+
+        Backup filenames use the pattern ``config.yaml.<YYYYMMDD_HHMMSS>.bak``.
+        Only the most recent *max_backups* backups are kept; older ones are
+        deleted automatically.
+        """
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
+        bak = self._path.parent / f"{self._path.name}.{stamp}.bak"
         try:
             shutil.copy2(self._path, bak)
-            logger.info("Backed up corrupt config to %s", bak)
+            logger.info("Backed up config to %s", bak)
         except OSError:
             logger.error("Failed to create backup at %s", bak, exc_info=True)
+            return
+
+        # Prune old backups, keeping only the newest *max_backups*.
+        self._prune_backups(max_backups=max_backups)
+
+    def _prune_backups(self, *, max_backups: int = 3) -> None:
+        """Remove old timestamped backups exceeding *max_backups*."""
+        pattern = f"{self._path.name}.*.bak"
+        backups = sorted(
+            self._path.parent.glob(pattern),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        for old in backups[max_backups:]:
+            try:
+                old.unlink()
+                logger.debug("Removed old backup %s", old)
+            except OSError:
+                logger.warning("Could not remove old backup %s", old, exc_info=True)
 
     def _write_yaml(self, config: CaseCtlConfig) -> None:
         """Write config as fresh YAML (no comment preservation)."""

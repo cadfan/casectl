@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import stat
+import time
 from pathlib import Path
 from typing import Any
 
@@ -70,10 +71,10 @@ class TestLoadCorruptYaml:
         cfg = await mgr.load()
 
         assert isinstance(cfg, CaseCtlConfig)
-        # The corrupt file should have been backed up
-        bak_file = config_file.with_suffix(".yaml.bak")
-        assert bak_file.exists()
-        assert bak_file.read_text(encoding="utf-8") == "{{{{invalid yaml!@#$%"
+        # The corrupt file should have been backed up with a timestamp
+        bak_files = list(tmp_path.glob("config.yaml.*.bak"))
+        assert len(bak_files) == 1
+        assert bak_files[0].read_text(encoding="utf-8") == "{{{{invalid yaml!@#$%"
 
     async def test_non_mapping_yaml_uses_defaults(self, tmp_path: Path) -> None:
         """A YAML file that parses as a list (not mapping) -> defaults."""
@@ -320,3 +321,73 @@ class TestDeepMerge:
         overrides: dict[str, Any] = {"key": "flat_value"}
         _deep_merge(base, overrides)
         assert base["key"] == "flat_value"
+
+
+# ---------------------------------------------------------------------------
+# Timestamped backups — keep last 3
+# ---------------------------------------------------------------------------
+
+
+class TestTimestampedBackups:
+    """Verify _backup() creates timestamped .bak files and prunes old ones."""
+
+    async def test_backup_creates_timestamped_file(self, tmp_path: Path) -> None:
+        """A single corrupt load should create exactly one timestamped backup."""
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text("not: [valid: yaml", encoding="utf-8")
+
+        mgr = ConfigManager(path=config_file)
+        await mgr.load()
+
+        bak_files = sorted(tmp_path.glob("config.yaml.*.bak"))
+        assert len(bak_files) == 1
+        # Filename should match pattern config.yaml.<YYYYMMDD_HHMMSS>.bak
+        name = bak_files[0].name
+        assert name.startswith("config.yaml.")
+        assert name.endswith(".bak")
+        stamp = name.removeprefix("config.yaml.").removesuffix(".bak")
+        assert len(stamp) == 22  # YYYYMMDD_HHMMSS_ffffff
+
+    async def test_backup_keeps_last_3(self, tmp_path: Path) -> None:
+        """After 5 corrupt loads, only 3 backups should remain."""
+        config_file = tmp_path / "config.yaml"
+
+        for i in range(5):
+            config_file.write_text(f"corrupt data {i}", encoding="utf-8")
+            mgr = ConfigManager(path=config_file)
+            await mgr.load()
+            # Small delay so timestamps differ and mtime ordering is reliable
+            time.sleep(0.05)
+
+        bak_files = sorted(tmp_path.glob("config.yaml.*.bak"))
+        assert len(bak_files) == 3
+
+        # The kept backups should contain the latest 3 corrupt contents
+        contents = sorted(f.read_text(encoding="utf-8") for f in bak_files)
+        assert "corrupt data 2" in contents
+        assert "corrupt data 3" in contents
+        assert "corrupt data 4" in contents
+
+    async def test_backup_preserves_content(self, tmp_path: Path) -> None:
+        """Backup file should contain the exact original corrupt content."""
+        config_file = tmp_path / "config.yaml"
+        original = "this: is: badly: indented: yaml:"
+        config_file.write_text(original, encoding="utf-8")
+
+        mgr = ConfigManager(path=config_file)
+        await mgr.load()
+
+        bak_files = list(tmp_path.glob("config.yaml.*.bak"))
+        assert len(bak_files) == 1
+        assert bak_files[0].read_text(encoding="utf-8") == original
+
+    async def test_non_mapping_yaml_creates_backup(self, tmp_path: Path) -> None:
+        """Non-mapping YAML (e.g. a list) should also be backed up."""
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text("- item1\n- item2\n", encoding="utf-8")
+
+        mgr = ConfigManager(path=config_file)
+        await mgr.load()
+
+        bak_files = list(tmp_path.glob("config.yaml.*.bak"))
+        assert len(bak_files) == 1
