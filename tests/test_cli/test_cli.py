@@ -264,7 +264,23 @@ class TestLedCommands:
     def test_led_color_out_of_range(self) -> None:
         runner = _runner()
         result = runner.invoke(cli, ["led", "color", "256", "0", "0"])
-        assert result.exit_code == 2  # Click UsageError for IntRange violation
+        assert result.exit_code == 1  # manual range check
+
+    def test_led_color_by_name(self) -> None:
+        mock_client = _mock_api_get({"color": {"red": 255, "green": 0, "blue": 0}})
+        runner = _runner()
+        with patch("casectl.cli.main.httpx.Client", return_value=mock_client):
+            result = runner.invoke(cli, ["led", "color", "red"])
+        assert result.exit_code == 0
+        assert "LED colour set to" in result.output
+
+    def test_led_color_by_hex(self) -> None:
+        mock_client = _mock_api_get({"color": {"red": 255, "green": 0, "blue": 128}})
+        runner = _runner()
+        with patch("casectl.cli.main.httpx.Client", return_value=mock_client):
+            result = runner.invoke(cli, ["led", "color", "#FF0080"])
+        assert result.exit_code == 0
+        assert "LED colour set to" in result.output
 
 
 # ---------------------------------------------------------------------------

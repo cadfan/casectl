@@ -311,16 +311,84 @@ def led_mode(ctx: click.Context, mode: str) -> None:
     console.print(f"[green]LED mode set to:[/green] {data.get('mode', mode)}")
 
 
-@led.command("color")
-@click.argument("r", type=click.IntRange(0, 255))
-@click.argument("g", type=click.IntRange(0, 255))
-@click.argument("b", type=click.IntRange(0, 255))
-@click.pass_context
-def led_color(ctx: click.Context, r: int, g: int, b: int) -> None:
-    """Set LED colour (R G B, each 0-255). Switches to manual mode.
+_COLOR_NAMES: dict[str, tuple[int, int, int]] = {
+    "red": (255, 0, 0),
+    "green": (0, 255, 0),
+    "blue": (0, 0, 255),
+    "white": (255, 255, 255),
+    "yellow": (255, 255, 0),
+    "cyan": (0, 255, 255),
+    "magenta": (255, 0, 255),
+    "orange": (255, 165, 0),
+    "pink": (255, 105, 180),
+    "purple": (128, 0, 128),
+    "teal": (0, 128, 128),
+    "coral": (255, 127, 80),
+    "gold": (255, 215, 0),
+    "lime": (0, 255, 0),
+    "navy": (0, 0, 128),
+    "arctic-steel": (138, 170, 196),
+}
 
-    Example: casectl led color 255 0 128
+
+def _parse_color(value: str) -> tuple[int, int, int]:
+    """Parse a colour from a name, hex code, or R,G,B string."""
+    # Named colour
+    if value.lower() in _COLOR_NAMES:
+        return _COLOR_NAMES[value.lower()]
+
+    # Hex code: #FF00FF or FF00FF
+    hex_str = value.lstrip("#")
+    if len(hex_str) == 6:
+        try:
+            r = int(hex_str[0:2], 16)
+            g = int(hex_str[2:4], 16)
+            b = int(hex_str[4:6], 16)
+            return (r, g, b)
+        except ValueError:
+            pass
+
+    raise click.BadParameter(
+        f"Unknown colour: {value}\n"
+        f"Use a name ({', '.join(_COLOR_NAMES)}), hex (#FF00FF), or three R G B values."
+    )
+
+
+@led.command("color")
+@click.argument("values", nargs=-1, required=True)
+@click.pass_context
+def led_color(ctx: click.Context, values: tuple[str, ...]) -> None:
+    """Set LED colour. Switches to manual mode.
+
+    \b
+    Accepts three formats:
+      casectl led color red              # named colour
+      casectl led color #FF0080          # hex code
+      casectl led color 255 0 128        # R G B values (0-255 each)
+
+    \b
+    Named colours:
+      red, green, blue, white, yellow, cyan, magenta, orange,
+      pink, purple, teal, coral, gold, lime, navy, arctic-steel
     """
+    if len(values) == 1:
+        # Named colour or hex code
+        r, g, b = _parse_color(values[0])
+    elif len(values) == 3:
+        # R G B integers
+        try:
+            r, g, b = int(values[0]), int(values[1]), int(values[2])
+        except ValueError:
+            err_console.print("[bold red]R, G, B values must be integers (0-255).[/]")
+            raise SystemExit(1)
+        for name, val in [("R", r), ("G", g), ("B", b)]:
+            if not 0 <= val <= 255:
+                err_console.print(f"[bold red]{name} must be 0-255, got {val}.[/]")
+                raise SystemExit(1)
+    else:
+        err_console.print("[bold red]Provide a colour name, hex code, or three R G B values.[/]")
+        raise SystemExit(1)
+
     data = _api_post(ctx, "/api/plugins/led-control/color", {"red": r, "green": g, "blue": b})
     color = data.get("color", {})
     console.print(
