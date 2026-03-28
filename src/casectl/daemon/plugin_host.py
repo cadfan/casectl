@@ -106,11 +106,13 @@ class PluginHost:
         hardware_registry: HardwareRegistry,
         event_bus: Any,
         daemon_version: str = "0.1.0",
+        allowed_plugins: list[str] | None = None,
     ) -> None:
         self._config_manager = config_manager
         self._hardware_registry = hardware_registry
         self._event_bus = event_bus
         self._daemon_version = daemon_version
+        self._allowed_plugins = allowed_plugins
 
         self._plugins: dict[str, CasePlugin] = {}
         self._contexts: dict[str, PluginContext] = {}
@@ -197,6 +199,14 @@ class PluginHost:
                 if ep.value in builtin_values:
                     continue
 
+                # -- Plugin whitelist check ---------------------------------
+                if self._allowed_plugins is not None and ep.name not in self._allowed_plugins:
+                    logger.warning(
+                        "Community plugin %r blocked by allowed_plugins whitelist — skipping",
+                        ep.name,
+                    )
+                    continue
+
                 try:
                     cls = ep.load()
                     classes.append(cls)
@@ -232,6 +242,14 @@ class PluginHost:
                 "Failed to instantiate plugin class %r:\n%s",
                 plugin_cls,
                 traceback.format_exc(),
+            )
+            return
+
+        # -- Protocol conformance check -------------------------------------
+        if not isinstance(plugin, CasePlugin):
+            logger.error(
+                "Plugin class %r does not conform to CasePlugin protocol — skipping",
+                plugin_cls,
             )
             return
 
@@ -437,6 +455,25 @@ class PluginHost:
                 "description": getattr(plugin, "description", ""),
             })
         return result
+
+    def populate_app_state(self, app: Any) -> None:
+        """Transfer plugin-registered state onto ``app.state``.
+
+        Each :class:`PluginContext` may store key-value pairs via
+        :meth:`~PluginContext.set_app_state` during ``setup()``.  This
+        method copies every stored pair onto the FastAPI ``app.state``
+        object so that route ``Depends()`` functions can retrieve them
+        at request time.
+
+        Parameters
+        ----------
+        app:
+            The :class:`FastAPI` application instance.
+        """
+        for name, ctx in self._contexts.items():
+            for key, value in ctx.get_app_state_items().items():
+                setattr(app.state, key, value)
+                logger.debug("Set app.state.%s (from plugin %r)", key, name)
 
     def get_routes(self) -> list[tuple[str, APIRouter]]:
         """Return ``(prefix, router)`` pairs for mounting into FastAPI.

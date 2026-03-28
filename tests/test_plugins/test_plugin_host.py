@@ -7,7 +7,7 @@ load, setup, start, stop, and query methods without real hardware or I2C.
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import APIRouter
@@ -97,6 +97,14 @@ class _HighVersionPlugin:
 
     def get_status(self) -> dict[str, Any]:
         return {"status": PluginStatus.STOPPED}
+
+
+class _NonConformingPlugin:
+    """Plugin that does NOT satisfy the CasePlugin protocol (missing required attrs)."""
+
+    def __init__(self) -> None:
+        pass
+    # Missing: name, version, description, min_daemon_version, setup, start, stop, get_status
 
 
 class _ExplodingSetupPlugin:
@@ -310,6 +318,183 @@ async def test_list_plugins_format(host: PluginHost) -> None:
         assert "version" in entry
         assert "status" in entry
         assert "description" in entry
+
+
+# ---------------------------------------------------------------------------
+# Plugin whitelist tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def host_with_whitelist() -> PluginHost:
+    """Return a PluginHost with allowed_plugins set to only allow 'trusted-plugin'."""
+    config_mgr = AsyncMock()
+    hw_registry = HardwareRegistry(expansion=None, oled=None, system_info=None)
+    event_bus = MagicMock()
+    event_bus.subscribe = MagicMock()
+    return PluginHost(
+        config_manager=config_mgr,
+        hardware_registry=hw_registry,
+        event_bus=event_bus,
+        daemon_version="0.1.0",
+        allowed_plugins=["trusted-plugin"],
+    )
+
+
+@pytest.fixture()
+def host_with_empty_whitelist() -> PluginHost:
+    """Return a PluginHost with an empty allowed_plugins (blocks all community)."""
+    config_mgr = AsyncMock()
+    hw_registry = HardwareRegistry(expansion=None, oled=None, system_info=None)
+    event_bus = MagicMock()
+    event_bus.subscribe = MagicMock()
+    return PluginHost(
+        config_manager=config_mgr,
+        hardware_registry=hw_registry,
+        event_bus=event_bus,
+        daemon_version="0.1.0",
+        allowed_plugins=[],
+    )
+
+
+def test_allowed_plugins_none_by_default(host: PluginHost) -> None:
+    """Default PluginHost has no whitelist (None = allow all)."""
+    assert host._allowed_plugins is None
+
+
+def test_allowed_plugins_stored(host_with_whitelist: PluginHost) -> None:
+    """PluginHost stores the allowed_plugins list."""
+    assert host_with_whitelist._allowed_plugins == ["trusted-plugin"]
+
+
+async def test_whitelist_does_not_affect_builtin_loading(
+    host_with_empty_whitelist: PluginHost,
+) -> None:
+    """Built-in plugins load even when allowed_plugins is an empty list.
+
+    The whitelist only affects community plugins discovered via entry points,
+    not built-in plugins loaded by module path.
+    """
+    # Built-in plugins are loaded via _load_single_plugin, not affected by whitelist
+    await host_with_empty_whitelist._load_single_plugin(_MockPlugin)
+    assert host_with_empty_whitelist.get_plugin("mock-plugin") is not None
+
+
+def _make_mock_entry_points(*ep_specs: tuple[str, str]):
+    """Create a mock entry_points function returning mock entry points.
+
+    Each *ep_specs* is (name, value).  The returned function replaces
+    ``importlib.metadata.entry_points`` in the plugin_host module.
+    """
+    eps = []
+    for name, value in ep_specs:
+        ep = MagicMock()
+        ep.name = name
+        ep.value = value
+        ep.load.return_value = type(name, (), {})  # unique class per ep
+        eps.append(ep)
+
+    def _mock_entry_points(group: str = ""):
+        return eps
+
+    return _mock_entry_points, eps
+
+
+async def test_whitelist_blocks_unlisted_community_plugins(
+    host_with_whitelist: PluginHost,
+) -> None:
+    """Community plugins not in the whitelist are blocked during discovery."""
+    mock_ep_fn, eps = _make_mock_entry_points(
+        ("trusted-plugin", "some.module:TrustedPlugin"),
+        ("malicious-plugin", "evil.module:BadPlugin"),
+    )
+    trusted_ep, blocked_ep = eps
+
+    # Patch only the entry_points import inside the method
+    with patch.object(
+        host_with_whitelist, "_discover_plugin_classes",
+        wraps=host_with_whitelist._discover_plugin_classes,
+    ):
+        # We need to patch the entry_points call inside the method
+        import importlib.metadata as _im
+        original_ep = _im.entry_points
+        _im.entry_points = mock_ep_fn
+
+        # Also suppress builtin loading to isolate community plugin behavior
+        original_builtins = __import__("casectl.daemon.plugin_host", fromlist=["_BUILTIN_PLUGINS"])
+        saved = original_builtins._BUILTIN_PLUGINS[:]
+        original_builtins._BUILTIN_PLUGINS = []
+        try:
+            classes = host_with_whitelist._discover_plugin_classes()
+        finally:
+            _im.entry_points = original_ep
+            original_builtins._BUILTIN_PLUGINS = saved
+
+    # Only the trusted plugin class should be discovered
+    assert trusted_ep.load.called
+    blocked_ep.load.assert_not_called()
+    assert len(classes) == 1
+
+
+async def test_whitelist_none_allows_all_community_plugins(
+    host: PluginHost,
+) -> None:
+    """When allowed_plugins is None, all community plugins are permitted."""
+    mock_ep_fn, eps = _make_mock_entry_points(
+        ("plugin-a", "mod_a:PluginA"),
+        ("plugin-b", "mod_b:PluginB"),
+    )
+
+    import importlib.metadata as _im
+    import casectl.daemon.plugin_host as _ph
+
+    original_ep = _im.entry_points
+    saved = _ph._BUILTIN_PLUGINS[:]
+    _ph._BUILTIN_PLUGINS = []
+    _im.entry_points = mock_ep_fn
+    try:
+        classes = host._discover_plugin_classes()
+    finally:
+        _im.entry_points = original_ep
+        _ph._BUILTIN_PLUGINS = saved
+
+    assert len(classes) == 2
+    for ep in eps:
+        assert ep.load.called
+
+
+async def test_empty_whitelist_blocks_all_community_plugins(
+    host_with_empty_whitelist: PluginHost,
+) -> None:
+    """An empty allowed_plugins list blocks all community plugins."""
+    mock_ep_fn, eps = _make_mock_entry_points(
+        ("any-plugin", "mod:AnyPlugin"),
+    )
+
+    import importlib.metadata as _im
+    import casectl.daemon.plugin_host as _ph
+
+    original_ep = _im.entry_points
+    saved = _ph._BUILTIN_PLUGINS[:]
+    _ph._BUILTIN_PLUGINS = []
+    _im.entry_points = mock_ep_fn
+    try:
+        classes = host_with_empty_whitelist._discover_plugin_classes()
+    finally:
+        _im.entry_points = original_ep
+        _ph._BUILTIN_PLUGINS = saved
+
+    eps[0].load.assert_not_called()
+    assert len(classes) == 0
+
+
+async def test_non_conforming_plugin_rejected(host: PluginHost) -> None:
+    """A plugin that doesn't satisfy the CasePlugin protocol is rejected."""
+    await host._load_single_plugin(_NonConformingPlugin)
+
+    # The non-conforming plugin should not be loaded
+    assert host.get_plugin("_NonConformingPlugin") is None
+    assert len(host._plugins) == 0
 
 
 async def test_version_satisfies_basic() -> None:
