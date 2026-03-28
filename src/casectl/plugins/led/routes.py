@@ -1,36 +1,52 @@
 """FastAPI routes for the led-control plugin.
 
 Mounted at ``/api/plugins/led-control`` by the plugin host.
+
+Dependencies are injected via ``app.state`` using FastAPI's ``Depends()``
+mechanism rather than module-level globals.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Annotated, Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
+
+if TYPE_CHECKING:
+    from casectl.config.manager import ConfigManager
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+
 # ---------------------------------------------------------------------------
-# Module-level references — set by the plugin during setup.
+# Dependency injection helpers
 # ---------------------------------------------------------------------------
 
-_get_status: Any = None   # callable returning status dict
-_get_config: Any = None   # callable returning config manager
 
+def _get_led_status(request: Request) -> dict[str, Any]:
+    """Retrieve the LED status callable from ``app.state`` and return its result.
 
-def configure(get_status: Any, get_config: Any) -> None:
-    """Wire the status accessor and config manager into the route module.
-
-    Called by :class:`LedControlPlugin` during ``setup()``.
+    Raises :class:`HTTPException` 503 if the status accessor has not been set.
     """
-    global _get_status, _get_config  # noqa: PLW0603
-    _get_status = get_status
-    _get_config = get_config
+    get_status = getattr(request.app.state, "led_get_status", None)
+    if get_status is None:
+        raise HTTPException(status_code=503, detail="LED controller not initialised")
+    return get_status()
+
+
+def _get_led_config_manager(request: Request) -> ConfigManager:
+    """Retrieve the config manager from ``app.state``.
+
+    Raises :class:`HTTPException` 503 if the config manager has not been set.
+    """
+    config_manager: ConfigManager | None = getattr(request.app.state, "led_config_manager", None)
+    if config_manager is None:
+        raise HTTPException(status_code=503, detail="Config manager not available")
+    return config_manager
 
 
 # ---------------------------------------------------------------------------
@@ -82,7 +98,7 @@ class LedStatusResponse(BaseModel):
 
 
 class SetLedModeRequest(BaseModel):
-    """Request body for POST /mode."""
+    """Request body for PUT /mode."""
 
     mode: int | str = Field(description="LED mode (0-5 or name: rainbow, breathing, follow-temp, manual, custom, off)")
 
@@ -100,7 +116,7 @@ class SetLedModeRequest(BaseModel):
 
 
 class SetLedColorRequest(BaseModel):
-    """Request body for POST /color."""
+    """Request body for PUT /color."""
 
     red: int = Field(ge=0, le=255, description="Red channel (0-255)")
     green: int = Field(ge=0, le=255, description="Green channel (0-255)")
@@ -113,12 +129,10 @@ class SetLedColorRequest(BaseModel):
 
 
 @router.get("/status", response_model=LedStatusResponse)
-async def led_status() -> LedStatusResponse:
+async def led_status(
+    status: Annotated[dict[str, Any], Depends(_get_led_status)],
+) -> LedStatusResponse:
     """Return the current LED mode, colour, and health state."""
-    if _get_status is None:
-        raise HTTPException(status_code=503, detail="LED controller not initialised")
-
-    status = _get_status()
     color = status.get("color", {"red": 0, "green": 0, "blue": 0})
     r, g, b = color.get("red", 0), color.get("green", 0), color.get("blue", 0)
     return LedStatusResponse(
@@ -130,15 +144,15 @@ async def led_status() -> LedStatusResponse:
     )
 
 
-@router.post("/mode")
-async def set_led_mode(request: SetLedModeRequest) -> dict[str, str]:
+@router.put("/mode")
+async def set_led_mode(
+    request: SetLedModeRequest,
+    config_manager: Annotated[Any, Depends(_get_led_config_manager)],
+) -> dict[str, str]:
     """Set the LED operating mode.
 
     Persists the new mode to config so it survives daemon restarts.
     """
-    if _get_config is None:
-        raise HTTPException(status_code=503, detail="Config manager not available")
-
     from casectl.config.models import LedMode
 
     try:
@@ -150,7 +164,6 @@ async def set_led_mode(request: SetLedModeRequest) -> dict[str, str]:
         )
 
     try:
-        config_manager = _get_config()
         await config_manager.update("led", {"mode": request.mode})
     except Exception as exc:
         logger.error("Failed to update LED mode config", exc_info=True)
@@ -159,19 +172,18 @@ async def set_led_mode(request: SetLedModeRequest) -> dict[str, str]:
     return {"status": "ok", "mode": LedMode(request.mode).name.lower()}
 
 
-@router.post("/color")
-async def set_led_color(request: SetLedColorRequest) -> dict[str, Any]:
+@router.put("/color")
+async def set_led_color(
+    request: SetLedColorRequest,
+    config_manager: Annotated[Any, Depends(_get_led_config_manager)],
+) -> dict[str, Any]:
     """Set the LED colour and switch to MANUAL mode.
 
     The colour is applied immediately and persisted to config.
     """
-    if _get_config is None:
-        raise HTTPException(status_code=503, detail="Config manager not available")
-
     from casectl.config.models import LedMode
 
     try:
-        config_manager = _get_config()
         await config_manager.update("led", {
             "mode": LedMode.MANUAL.value,
             "red_value": request.red,

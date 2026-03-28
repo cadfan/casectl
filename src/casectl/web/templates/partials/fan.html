@@ -43,7 +43,7 @@
   <div class="control-buttons" role="group" aria-label="Fan mode controls">
     <button type="button"
             class="btn btn--control{% if fan_mode == 'follow_temp' %} btn--active{% endif %}"
-            hx-post="/api/plugins/fan-control/mode"
+            hx-put="/api/plugins/fan-control/mode"
             hx-vals='{"mode": 0}'
             hx-swap="none"
             aria-pressed="{{ 'true' if fan_mode == 'follow_temp' else 'false' }}">
@@ -51,7 +51,7 @@
     </button>
     <button type="button"
             class="btn btn--control{% if fan_mode == 'follow_rpi' %} btn--active{% endif %}"
-            hx-post="/api/plugins/fan-control/mode"
+            hx-put="/api/plugins/fan-control/mode"
             hx-vals='{"mode": 1}'
             hx-swap="none"
             aria-pressed="{{ 'true' if fan_mode == 'follow_rpi' else 'false' }}">
@@ -59,7 +59,7 @@
     </button>
     <button type="button"
             class="btn btn--control{% if fan_mode == 'manual' %} btn--active{% endif %}"
-            hx-post="/api/plugins/fan-control/mode"
+            hx-put="/api/plugins/fan-control/mode"
             hx-vals='{"mode": 2}'
             hx-swap="none"
             aria-pressed="{{ 'true' if fan_mode == 'manual' else 'false' }}">
@@ -67,7 +67,7 @@
     </button>
     <button type="button"
             class="btn btn--control{% if fan_mode == 'off' %} btn--active{% endif %}"
-            hx-post="/api/plugins/fan-control/mode"
+            hx-put="/api/plugins/fan-control/mode"
             hx-vals='{"mode": 4}'
             hx-swap="none"
             aria-pressed="{{ 'true' if fan_mode == 'off' else 'false' }}">

@@ -2,34 +2,38 @@
 
 Mounted at ``/api/plugins/prometheus`` by the plugin host.
 Exposes metrics in Prometheus text exposition format.
+
+Dependencies are injected via ``app.state`` using FastAPI's ``Depends()``
+mechanism rather than module-level globals.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import PlainTextResponse
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+
 # ---------------------------------------------------------------------------
-# Module-level reference — set by the plugin during setup.
+# Dependency injection helpers
 # ---------------------------------------------------------------------------
 
-_get_metrics: Any = None  # callable returning latest metrics dict or None
 
+def _get_prometheus_metrics(request: Request) -> dict[str, Any] | None:
+    """Retrieve the metrics accessor from ``app.state`` and return its result.
 
-def configure(get_metrics: Any) -> None:
-    """Wire the metrics accessor into the route module.
-
-    Called by :class:`PrometheusPlugin` during ``setup()``.
+    Returns ``None`` if no metrics are available yet (does not raise).
     """
-    global _get_metrics  # noqa: PLW0603
-    _get_metrics = get_metrics
+    get_metrics = getattr(request.app.state, "prometheus_get_metrics", None)
+    if get_metrics is None:
+        return None
+    return get_metrics()
 
 
 # ---------------------------------------------------------------------------
@@ -167,18 +171,16 @@ def _build_metrics_text(metrics: dict[str, Any]) -> str:
 
 
 @router.get("/metrics")
-async def prometheus_metrics() -> PlainTextResponse:
+async def prometheus_metrics(
+    metrics: Annotated[dict[str, Any] | None, Depends(_get_prometheus_metrics)],
+) -> PlainTextResponse:
     """Return system metrics in Prometheus text exposition format.
 
     Content-Type is ``text/plain; version=0.0.4; charset=utf-8`` per the
     Prometheus specification.
     """
-    metrics: dict[str, Any] | None = None
-    if _get_metrics is not None:
-        metrics = _get_metrics()
-
     if metrics is None:
-        # Return empty metrics rather than an error — Prometheus expects
+        # Return empty metrics rather than an error -- Prometheus expects
         # a successful response even when no data is available yet.
         return PlainTextResponse(
             content="# No metrics collected yet.\n",

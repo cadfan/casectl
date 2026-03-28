@@ -1,36 +1,52 @@
 """FastAPI routes for the oled-display plugin.
 
 Mounted at ``/api/plugins/oled-display`` by the plugin host.
+
+Dependencies are injected via ``app.state`` using FastAPI's ``Depends()``
+mechanism rather than module-level globals.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    from casectl.config.manager import ConfigManager
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+
 # ---------------------------------------------------------------------------
-# Module-level references — set by the plugin during setup.
+# Dependency injection helpers
 # ---------------------------------------------------------------------------
 
-_get_status: Any = None   # callable returning status dict
-_get_config: Any = None   # callable returning config manager
 
+def _get_oled_status(request: Request) -> dict[str, Any]:
+    """Retrieve the OLED status callable from ``app.state`` and return its result.
 
-def configure(get_status: Any, get_config: Any) -> None:
-    """Wire the status accessor and config manager into the route module.
-
-    Called by :class:`OledDisplayPlugin` during ``setup()``.
+    Raises :class:`HTTPException` 503 if the status accessor has not been set.
     """
-    global _get_status, _get_config  # noqa: PLW0603
-    _get_status = get_status
-    _get_config = get_config
+    get_status = getattr(request.app.state, "oled_get_status", None)
+    if get_status is None:
+        raise HTTPException(status_code=503, detail="OLED display not initialised")
+    return get_status()
+
+
+def _get_oled_config_manager(request: Request) -> ConfigManager:
+    """Retrieve the config manager from ``app.state``.
+
+    Raises :class:`HTTPException` 503 if the config manager has not been set.
+    """
+    config_manager: ConfigManager | None = getattr(request.app.state, "oled_config_manager", None)
+    if config_manager is None:
+        raise HTTPException(status_code=503, detail="Config manager not available")
+    return config_manager
 
 
 # ---------------------------------------------------------------------------
@@ -49,14 +65,14 @@ class OledStatusResponse(BaseModel):
 
 
 class SetScreenRequest(BaseModel):
-    """Request body for POST /screen."""
+    """Request body for PUT /screen."""
 
     index: int = Field(ge=0, le=3, description="Screen index (0-3)")
     enabled: bool = Field(description="Whether to enable or disable the screen")
 
 
 class SetRotationRequest(BaseModel):
-    """Request body for POST /rotation."""
+    """Request body for PUT /rotation."""
 
     rotation: Literal[0, 180] = Field(description="Display rotation in degrees (0 or 180)")
 
@@ -67,12 +83,10 @@ class SetRotationRequest(BaseModel):
 
 
 @router.get("/status", response_model=OledStatusResponse)
-async def oled_status() -> OledStatusResponse:
+async def oled_status(
+    status: Annotated[dict[str, Any], Depends(_get_oled_status)],
+) -> OledStatusResponse:
     """Return the current OLED display state."""
-    if _get_status is None:
-        raise HTTPException(status_code=503, detail="OLED display not initialised")
-
-    status = _get_status()
     return OledStatusResponse(
         current_screen=status.get("current_screen", 0),
         screen_names=status.get("screen_names", []),
@@ -82,14 +96,13 @@ async def oled_status() -> OledStatusResponse:
     )
 
 
-@router.post("/screen")
-async def set_screen(request: SetScreenRequest) -> dict[str, Any]:
+@router.put("/screen")
+async def set_screen(
+    request: SetScreenRequest,
+    config_manager: Annotated[Any, Depends(_get_oled_config_manager)],
+) -> dict[str, Any]:
     """Enable or disable a specific screen in the rotation cycle."""
-    if _get_config is None:
-        raise HTTPException(status_code=503, detail="Config manager not available")
-
     try:
-        config_manager = _get_config()
         raw = await config_manager.get("oled")
 
         # Update the specific screen's enabled state.
@@ -115,14 +128,13 @@ async def set_screen(request: SetScreenRequest) -> dict[str, Any]:
     }
 
 
-@router.post("/rotation")
-async def set_rotation(request: SetRotationRequest) -> dict[str, Any]:
+@router.put("/rotation")
+async def set_rotation(
+    request: SetRotationRequest,
+    config_manager: Annotated[Any, Depends(_get_oled_config_manager)],
+) -> dict[str, Any]:
     """Set the display rotation."""
-    if _get_config is None:
-        raise HTTPException(status_code=503, detail="Config manager not available")
-
     try:
-        config_manager = _get_config()
         await config_manager.update("oled", {"rotation": request.rotation})
     except Exception as exc:
         logger.error("Failed to update OLED rotation config", exc_info=True)

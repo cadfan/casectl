@@ -33,7 +33,7 @@
   <div class="control-buttons" role="group" aria-label="LED mode controls">
     <button type="button"
             class="btn btn--control{% if led_mode == 'rainbow' %} btn--active{% endif %}"
-            hx-post="/api/plugins/led-control/mode"
+            hx-put="/api/plugins/led-control/mode"
             hx-vals='{"mode": 0}'
             hx-swap="none"
             aria-pressed="{{ 'true' if led_mode == 'rainbow' else 'false' }}">
@@ -41,7 +41,7 @@
     </button>
     <button type="button"
             class="btn btn--control{% if led_mode == 'breathing' %} btn--active{% endif %}"
-            hx-post="/api/plugins/led-control/mode"
+            hx-put="/api/plugins/led-control/mode"
             hx-vals='{"mode": 1}'
             hx-swap="none"
             aria-pressed="{{ 'true' if led_mode == 'breathing' else 'false' }}">
@@ -49,7 +49,7 @@
     </button>
     <button type="button"
             class="btn btn--control{% if led_mode == 'follow_temp' %} btn--active{% endif %}"
-            hx-post="/api/plugins/led-control/mode"
+            hx-put="/api/plugins/led-control/mode"
             hx-vals='{"mode": 2}'
             hx-swap="none"
             aria-pressed="{{ 'true' if led_mode == 'follow_temp' else 'false' }}">
@@ -57,7 +57,7 @@
     </button>
     <button type="button"
             class="btn btn--control{% if led_mode == 'manual' %} btn--active{% endif %}"
-            hx-post="/api/plugins/led-control/mode"
+            hx-put="/api/plugins/led-control/mode"
             hx-vals='{"mode": 3}'
             hx-swap="none"
             aria-pressed="{{ 'true' if led_mode == 'manual' else 'false' }}">
@@ -65,7 +65,7 @@
     </button>
     <button type="button"
             class="btn btn--control{% if led_mode == 'off' %} btn--active{% endif %}"
-            hx-post="/api/plugins/led-control/mode"
+            hx-put="/api/plugins/led-control/mode"
             hx-vals='{"mode": 5}'
             hx-swap="none"
             aria-pressed="{{ 'true' if led_mode == 'off' else 'false' }}">

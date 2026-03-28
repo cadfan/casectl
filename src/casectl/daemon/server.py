@@ -380,6 +380,9 @@ def create_app(
                 "WebSocket client removed (%d active)", event_bus.ws_count
             )
 
+    # -- Populate app.state for plugin Depends() injection -------------------
+    plugin_host.populate_app_state(app)
+
     # -- Mount plugin routes ------------------------------------------------
     # Plugin routes are prefixed with the key from PluginHost._routes, which
     # is already ``/api/plugins/<name>``.

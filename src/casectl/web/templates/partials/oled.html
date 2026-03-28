@@ -52,7 +52,7 @@
       {% set is_enabled = oled_screens_enabled[loop.index0] | default(true) %}
       <button type="button"
               class="btn btn--toggle{% if is_enabled %} btn--active{% endif %}{% if loop.index0 == oled_current_screen %} btn--current{% endif %}"
-              hx-post="/api/plugins/oled-display/screen"
+              hx-put="/api/plugins/oled-display/screen"
               hx-vals='{"index": {{ loop.index0 }}, "enabled": {{ "false" if is_enabled else "true" }}}'
               hx-swap="none"
               aria-pressed="{{ 'true' if is_enabled else 'false' }}"

@@ -14,7 +14,7 @@ import pytest
 
 from casectl.plugins.base import HardwareRegistry, PluginContext, PluginStatus
 from casectl.plugins.prometheus.plugin import PrometheusPlugin
-from casectl.plugins.prometheus.routes import _build_metrics_text, _format_gauge, configure
+from casectl.plugins.prometheus.routes import _build_metrics_text, _format_gauge
 
 
 # ---------------------------------------------------------------------------

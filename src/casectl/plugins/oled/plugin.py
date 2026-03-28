@@ -179,13 +179,12 @@ class OledDisplayPlugin:
         """
         self._ctx = ctx
 
-        # Register routes.
+        # Register routes — dependencies are provided via app.state so that
+        # route handlers use FastAPI Depends() instead of module-level globals.
         from casectl.plugins.oled import routes
 
-        routes.configure(
-            get_status=self._get_oled_status,
-            get_config=lambda: ctx._config_manager,
-        )
+        ctx.set_app_state("oled_get_status", self._get_oled_status)
+        ctx.set_app_state("oled_config_manager", ctx._config_manager)
         ctx.register_routes(routes.router)
 
         # Subscribe to metrics updates for rendering screen content.

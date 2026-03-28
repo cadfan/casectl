@@ -238,6 +238,31 @@ class PluginContext:
                 event,
             )
 
+    # -- app state ----------------------------------------------------------
+
+    def set_app_state(self, key: str, value: Any) -> None:
+        """Store a key-value pair to be copied onto ``app.state`` at mount time.
+
+        Route handlers can then retrieve the value via FastAPI ``Depends()``
+        using ``Request.app.state.<key>``.
+
+        Parameters
+        ----------
+        key:
+            The attribute name on ``app.state``.
+        value:
+            The value to store.
+        """
+        if not hasattr(self, "_app_state_items"):
+            self._app_state_items: dict[str, Any] = {}
+        self._app_state_items[key] = value
+
+    def get_app_state_items(self) -> dict[str, Any]:
+        """Return all key-value pairs registered via :meth:`set_app_state`."""
+        if not hasattr(self, "_app_state_items"):
+            self._app_state_items: dict[str, Any] = {}
+        return dict(self._app_state_items)
+
     # -- properties ---------------------------------------------------------
 
     @property

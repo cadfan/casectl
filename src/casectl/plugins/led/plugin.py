@@ -59,13 +59,12 @@ class LedControlPlugin:
         """
         self._ctx = ctx
 
-        # Register routes.
+        # Register routes — dependencies are provided via app.state so that
+        # route handlers use FastAPI Depends() instead of module-level globals.
         from casectl.plugins.led import routes
 
-        routes.configure(
-            get_status=self._get_led_status,
-            get_config=lambda: ctx._config_manager,
-        )
+        ctx.set_app_state("led_get_status", self._get_led_status)
+        ctx.set_app_state("led_config_manager", ctx._config_manager)
         ctx.register_routes(routes.router)
 
         ctx.logger.info("LED control plugin setup complete")

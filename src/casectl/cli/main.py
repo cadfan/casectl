@@ -74,6 +74,24 @@ def _api_post(ctx: click.Context, path: str, json: dict) -> dict:
         raise SystemExit(1)
 
 
+def _api_put(ctx: click.Context, path: str, json: dict) -> dict:
+    """PUT JSON to *path* on the daemon API and return parsed JSON."""
+    try:
+        with _client(ctx) as client:
+            resp = client.put(path, json=json)
+            resp.raise_for_status()
+            return resp.json()
+    except httpx.ConnectError:
+        err_console.print(
+            "[bold red]Cannot connect to casectl daemon. "
+            "Is 'casectl serve' running?[/]"
+        )
+        raise SystemExit(1)
+    except httpx.HTTPStatusError as exc:
+        err_console.print(f"[bold red]API error:[/] {exc.response.status_code} — {exc.response.text}")
+        raise SystemExit(1)
+
+
 def _api_patch(ctx: click.Context, path: str, json: dict) -> dict:
     """PATCH JSON to *path* on the daemon API and return parsed JSON."""
     try:
@@ -224,7 +242,7 @@ def fan_mode(ctx: click.Context, mode: str) -> None:
       off          Fans disabled
     """
     mode_int = _FAN_MODE_NAMES[mode.lower()]
-    data = _api_post(ctx, "/api/plugins/fan-control/mode", {"mode": mode_int})
+    data = _api_put(ctx, "/api/plugins/fan-control/mode", {"mode": mode_int})
     console.print(f"[green]Fan mode set to:[/green] {data.get('mode', mode)}")
 
 
@@ -244,7 +262,7 @@ def fan_speed(ctx: click.Context, channel: int, duty: int) -> None:
     # Build a duty list with the correct channel set.
     duty_list = [0] * (channel + 1)
     duty_list[channel] = duty
-    data = _api_post(ctx, "/api/plugins/fan-control/speed", {"duty": duty_list})
+    data = _api_put(ctx, "/api/plugins/fan-control/speed", {"duty": duty_list})
     console.print(f"[green]Fan speed set.[/green] Hardware duty: {data.get('duty_hw', duty_list)}")
 
 
@@ -314,7 +332,7 @@ def led_mode(ctx: click.Context, mode: str) -> None:
       off          LEDs disabled
     """
     mode_int = _LED_MODE_NAMES[mode.lower()]
-    data = _api_post(ctx, "/api/plugins/led-control/mode", {"mode": mode_int})
+    data = _api_put(ctx, "/api/plugins/led-control/mode", {"mode": mode_int})
     console.print(f"[green]LED mode set to:[/green] {data.get('mode', mode)}")
 
 
@@ -396,7 +414,7 @@ def led_color(ctx: click.Context, values: tuple[str, ...]) -> None:
         err_console.print("[bold red]Provide a colour name, hex code, or three R G B values.[/]")
         raise SystemExit(1)
 
-    data = _api_post(ctx, "/api/plugins/led-control/color", {"red": r, "green": g, "blue": b})
+    data = _api_put(ctx, "/api/plugins/led-control/color", {"red": r, "green": g, "blue": b})
     color = data.get("color", {})
     console.print(
         f"[green]LED colour set to:[/green] "

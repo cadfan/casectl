@@ -1,33 +1,37 @@
 """FastAPI routes for the system-monitor plugin.
 
 Mounted at ``/api/plugins/system-monitor`` by the plugin host.
+
+Dependencies are injected via ``app.state`` using FastAPI's ``Depends()``
+mechanism rather than module-level globals.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+
 # ---------------------------------------------------------------------------
-# Module-level reference — set by the plugin during setup.
+# Dependency injection helpers
 # ---------------------------------------------------------------------------
 
-_get_metrics: Any = None  # callable returning latest metrics dict
 
+def _get_monitor_metrics(request: Request) -> dict[str, Any] | None:
+    """Retrieve the metrics accessor from ``app.state`` and return its result.
 
-def configure(get_metrics: Any) -> None:
-    """Wire the metrics accessor into the route module.
-
-    Called by :class:`SystemMonitorPlugin` during ``setup()``.
+    Raises :class:`HTTPException` 503 if the accessor has not been set.
     """
-    global _get_metrics  # noqa: PLW0603
-    _get_metrics = get_metrics
+    get_metrics = getattr(request.app.state, "monitor_get_metrics", None)
+    if get_metrics is None:
+        raise HTTPException(status_code=503, detail="System monitor not initialised")
+    return get_metrics()
 
 
 # ---------------------------------------------------------------------------
@@ -36,15 +40,13 @@ def configure(get_metrics: Any) -> None:
 
 
 @router.get("/status")
-async def monitor_status() -> dict[str, Any]:
+async def monitor_status(
+    metrics: Annotated[dict[str, Any] | None, Depends(_get_monitor_metrics)],
+) -> dict[str, Any]:
     """Return the full set of latest system metrics as JSON.
 
     The response schema matches :class:`casectl.config.models.SystemMetrics`.
     """
-    if _get_metrics is None:
-        raise HTTPException(status_code=503, detail="System monitor not initialised")
-
-    metrics = _get_metrics()
     if metrics is None:
         raise HTTPException(status_code=503, detail="No metrics collected yet")
 

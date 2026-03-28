@@ -55,13 +55,12 @@ class FanControlPlugin:
             system_info=hw.system_info,
         )
 
-        # Register routes.
+        # Register routes — dependencies are provided via app.state so that
+        # route handlers use FastAPI Depends() instead of module-level globals.
         from casectl.plugins.fan import routes
 
-        routes.configure(
-            controller=self._controller,
-            get_config=lambda: ctx._config_manager,
-        )
+        ctx.set_app_state("fan_controller", self._controller)
+        ctx.set_app_state("fan_config_manager", ctx._config_manager)
         ctx.register_routes(routes.router)
 
         # Subscribe to metrics_updated events so the controller can use

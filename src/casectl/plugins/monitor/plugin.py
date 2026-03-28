@@ -54,10 +54,11 @@ class SystemMonitorPlugin:
         """
         self._ctx = ctx
 
-        # Register routes.
+        # Register routes — dependencies are provided via app.state so that
+        # route handlers use FastAPI Depends() instead of module-level globals.
         from casectl.plugins.monitor import routes
 
-        routes.configure(get_metrics=lambda: self._latest_metrics)
+        ctx.set_app_state("monitor_get_metrics", lambda: self._latest_metrics)
         ctx.register_routes(routes.router)
 
         ctx.logger.info("System monitor plugin setup complete")
