@@ -437,7 +437,12 @@ def run_top(
     console:
         Optional Rich Console for output (useful for testing).
     """
-    from casectl.tui.input_handler import KeyHandler, read_key_nonblocking
+    from casectl.tui.input_handler import (
+        KeyHandler,
+        enter_raw_mode,
+        exit_raw_mode,
+        read_key_nonblocking,
+    )
 
     refresh_interval = max(
         MIN_REFRESH_INTERVAL,
@@ -462,6 +467,7 @@ def run_top(
     # Catch SIGINT gracefully
     old_handler = signal.signal(signal.SIGINT, _handle_signal)
 
+    enter_raw_mode()
     try:
         with Live(
             layout,
@@ -505,4 +511,5 @@ def run_top(
     except KeyboardInterrupt:
         pass
     finally:
+        exit_raw_mode()
         signal.signal(signal.SIGINT, old_handler)

@@ -52,28 +52,21 @@ def read_key_nonblocking() -> str | None:
     Returns the character pressed, or ``None`` if no input is available
     or the terminal does not support raw mode.
 
-    Uses ``select()`` + ``termios`` raw mode on Unix systems.
-    Falls back to returning ``None`` on unsupported platforms.
+    Uses ``select()`` on the raw stdin fd. The terminal is kept in raw
+    mode for the entire ``casectl top`` session (set once in
+    :func:`enter_raw_mode`) so that Rich's Live alternate screen and
+    our keystroke reader don't fight over termios settings.
     """
     if not _is_real_terminal():
         return None
 
     try:
         import select
-        import termios
-        import tty
     except ImportError:
         return None
 
     fd = sys.stdin.fileno()
     try:
-        old_settings = termios.tcgetattr(fd)
-    except termios.error:
-        return None
-
-    try:
-        tty.setraw(fd)
-        # Check if data is available (0-second timeout = non-blocking)
         rlist, _, _ = select.select([fd], [], [], 0)
         if rlist:
             ch = os.read(fd, 1).decode("utf-8", errors="ignore")
@@ -81,11 +74,55 @@ def read_key_nonblocking() -> str | None:
         return None
     except (OSError, ValueError):
         return None
+
+
+# Saved terminal settings for restore on exit.
+_saved_termios: list[Any] | None = None
+
+
+def enter_raw_mode() -> None:
+    """Put the terminal into cbreak mode (like raw, but signals still work).
+
+    Call once before the Live loop starts. Pair with :func:`exit_raw_mode`.
+    """
+    global _saved_termios  # noqa: PLW0603
+
+    if not _is_real_terminal():
+        return
+
+    try:
+        import termios
+        import tty
+    except ImportError:
+        return
+
+    fd = sys.stdin.fileno()
+    try:
+        _saved_termios = termios.tcgetattr(fd)
+        tty.setcbreak(fd)  # cbreak = keys available immediately, signals still work
+    except termios.error:
+        _saved_termios = None
+
+
+def exit_raw_mode() -> None:
+    """Restore the terminal to its original settings."""
+    global _saved_termios  # noqa: PLW0603
+
+    if _saved_termios is None:
+        return
+
+    try:
+        import termios
+    except ImportError:
+        return
+
+    fd = sys.stdin.fileno()
+    try:
+        termios.tcsetattr(fd, termios.TCSADRAIN, _saved_termios)
+    except termios.error:
+        pass
     finally:
-        try:
-            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-        except termios.error:
-            pass
+        _saved_termios = None
 
 
 # ---------------------------------------------------------------------------
