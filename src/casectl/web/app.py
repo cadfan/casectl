@@ -12,8 +12,10 @@ import socket
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from urllib.parse import urlencode
+
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
 if TYPE_CHECKING:
@@ -158,9 +160,35 @@ def create_web_router(plugin_host: PluginHost, config_manager: ConfigManager) ->
     # Full-page routes
     # -----------------------------------------------------------------------
 
-    @router.get("/", response_class=HTMLResponse)
-    async def dashboard(request: Request) -> HTMLResponse:
-        """Render the main dashboard page."""
+    @router.get("/", response_class=HTMLResponse, response_model=None)
+    async def dashboard(request: Request) -> Response:
+        """Render the main dashboard page.
+
+        When the URL contains a ``?token=`` query parameter, the token is
+        stored in an ``httponly`` cookie and the browser is redirected back
+        to the same path *without* the token.  This keeps the secret out of
+        the URL bar, browser history, and server logs.
+        """
+        # -- Token cookie-and-redirect -----------------------------------------
+        token = request.query_params.get("token")
+        if token:
+            # Build the redirect URL stripping the token param but keeping
+            # any other query parameters that may be present.
+            remaining = {k: v for k, v in request.query_params.items() if k != "token"}
+            redirect_path = str(request.url.path)
+            if remaining:
+                redirect_path = f"{redirect_path}?{urlencode(remaining)}"
+            response = RedirectResponse(url=redirect_path, status_code=302)
+            response.set_cookie(
+                "casectl_token",
+                token,
+                httponly=True,
+                samesite="lax",
+                secure=request.url.scheme == "https",
+            )
+            return response
+
+        # -- Normal dashboard render -------------------------------------------
         hostname = _hostname()
 
         # Fetch initial data for all cards so the first render is populated.
@@ -179,7 +207,7 @@ def create_web_router(plugin_host: PluginHost, config_manager: ConfigManager) ->
             if status.value == "degraded":
                 health = "degraded"
 
-        response = templates.TemplateResponse(request, "dashboard.html",
+        return templates.TemplateResponse(request, "dashboard.html",
             {
                 "hostname": hostname,
                 "health": health,
@@ -203,13 +231,6 @@ def create_web_router(plugin_host: PluginHost, config_manager: ConfigManager) ->
                 "oled_screens_enabled": oled.get("screens_enabled", []),
             },
         )
-
-        # Set auth cookie so HTMX partial requests authenticate without ?token=
-        token = request.query_params.get("token")
-        if token:
-            response.set_cookie("casectl_token", token, httponly=True, samesite="lax", secure=request.url.scheme == "https")
-
-        return response
 
     # -----------------------------------------------------------------------
     # HTMX partial routes

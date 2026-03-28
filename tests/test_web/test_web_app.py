@@ -217,3 +217,62 @@ def test_partial_fan_with_no_plugin() -> None:
 
     resp = client.get("/w/fan")
     assert resp.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Tests: Token redirect (cookie-and-strip)
+# ---------------------------------------------------------------------------
+
+
+def test_token_param_returns_302_redirect() -> None:
+    """GET /?token=abc should 302 redirect to / and set the cookie."""
+    client, _, _ = _make_test_client()
+    resp = client.get("/?token=abc123", follow_redirects=False)
+    assert resp.status_code == 302
+    assert resp.headers["location"] == "/"
+    # Cookie should be set
+    assert "casectl_token" in resp.cookies
+    assert resp.cookies["casectl_token"] == "abc123"
+
+
+def test_token_param_preserves_other_query_params() -> None:
+    """GET /?token=abc&foo=bar should redirect to /?foo=bar."""
+    client, _, _ = _make_test_client()
+    resp = client.get("/?token=abc123&foo=bar", follow_redirects=False)
+    assert resp.status_code == 302
+    assert resp.headers["location"] == "/?foo=bar"
+
+
+def test_token_param_stripped_from_redirect_url() -> None:
+    """The redirect URL must NOT contain the token parameter."""
+    client, _, _ = _make_test_client()
+    resp = client.get("/?token=secret&other=keep", follow_redirects=False)
+    location = resp.headers["location"]
+    assert "token=" not in location
+    assert "other=keep" in location
+
+
+def test_no_token_param_returns_200() -> None:
+    """GET / without ?token= should return 200 (normal dashboard)."""
+    client, _, _ = _make_test_client()
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert "casectl" in resp.text.lower()
+
+
+def test_token_redirect_sets_httponly_cookie() -> None:
+    """The casectl_token cookie should be httponly."""
+    client, _, _ = _make_test_client()
+    resp = client.get("/?token=secret", follow_redirects=False)
+    # Check Set-Cookie header for httponly flag
+    set_cookie = resp.headers.get("set-cookie", "")
+    assert "httponly" in set_cookie.lower()
+
+
+def test_token_redirect_followed_renders_dashboard() -> None:
+    """Following the redirect after ?token= should render the dashboard."""
+    client, _, _ = _make_test_client()
+    # Follow redirects — should end up at the dashboard with 200
+    resp = client.get("/?token=abc123", follow_redirects=True)
+    assert resp.status_code == 200
+    assert "casectl" in resp.text.lower()
