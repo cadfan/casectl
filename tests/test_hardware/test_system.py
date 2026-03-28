@@ -323,11 +323,13 @@ class TestGetAllMetrics:
 
     def test_all_metrics_is_frozen_dataclass(self) -> None:
         """AllMetrics instances should be immutable."""
+        from casectl.hardware.system import SwapInfo
         metrics = AllMetrics(
             cpu_usage=10.0,
             cpu_temperature=40.0,
             memory=MemoryInfo(percent=50.0, used_gb=2.0, total_gb=4.0),
             disk=DiskInfo(percent=30.0, used_gb=10.0, total_gb=32.0),
+            swap=SwapInfo(percent=5.0, used_gb=0.2, total_gb=4.0),
             ip_address="10.0.0.1",
             fan_duty=100,
             date="2026-01-01",

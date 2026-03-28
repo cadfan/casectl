@@ -153,11 +153,18 @@ def build_cpu_panel(data: dict[str, Any] | None) -> Panel:
         disk_pct = metrics.get("disk_percent", 0.0)
         case_temp = metrics.get("case_temp", 0.0)
 
+        swap_pct = metrics.get("swap_percent", 0.0)
+        swap_used = metrics.get("swap_used_gb", 0.0)
+        swap_total = metrics.get("swap_total_gb", 0.0)
+
         table.add_row("CPU Temp", _temp_bar(cpu_temp))
         table.add_row("Case Temp", _temp_bar(case_temp))
         table.add_row("CPU", _percent_bar(cpu_pct))
         table.add_row("Memory", _percent_bar(mem_pct))
         table.add_row("Disk", _percent_bar(disk_pct))
+        if swap_total > 0:
+            swap_label = f"Swap ({swap_used:.1f}/{swap_total:.1f}G)"
+            table.add_row(swap_label, _percent_bar(swap_pct))
 
     return Panel(table, title="[bold cyan]System Metrics[/]", border_style="cyan")
 

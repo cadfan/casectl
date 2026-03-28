@@ -120,6 +120,9 @@ class SystemMonitorPlugin:
         cpu_percent: float = 0.0
         memory_percent: float = 0.0
         disk_percent: float = 0.0
+        swap_percent: float = 0.0
+        swap_used_gb: float = 0.0
+        swap_total_gb: float = 0.0
         cpu_temp: float = 0.0
         ip_address: str = ""
         rpi_fan_duty: int = 0
@@ -134,6 +137,9 @@ class SystemMonitorPlugin:
                 cpu_temp = all_metrics.cpu_temperature
                 memory_percent = all_metrics.memory.percent
                 disk_percent = all_metrics.disk.percent
+                swap_percent = all_metrics.swap.percent
+                swap_used_gb = all_metrics.swap.used_gb
+                swap_total_gb = all_metrics.swap.total_gb
                 ip_address = all_metrics.ip_address
                 rpi_fan_duty = all_metrics.fan_duty
                 date_str = all_metrics.date
@@ -183,6 +189,9 @@ class SystemMonitorPlugin:
             weekday=weekday_str,
             time=time_str,
             rpi_fan_duty=rpi_fan_duty,
+            swap_percent=swap_percent,
+            swap_used_gb=swap_used_gb,
+            swap_total_gb=swap_total_gb,
         )
 
         return metrics.model_dump()

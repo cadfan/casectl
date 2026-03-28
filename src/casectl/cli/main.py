@@ -514,6 +514,9 @@ def monitor(ctx: click.Context) -> None:
     table.add_row("CPU Usage", f"{data.get('cpu_percent', 0):.1f}%")
     table.add_row("Memory Usage", f"{data.get('memory_percent', 0):.1f}%")
     table.add_row("Disk Usage", f"{data.get('disk_percent', 0):.1f}%")
+    swap_total = data.get("swap_total_gb", 0)
+    if swap_total > 0:
+        table.add_row("Swap", f"{data.get('swap_percent', 0):.1f}% ({data.get('swap_used_gb', 0):.1f}/{swap_total:.1f} GB)")
     table.add_row("CPU Temp", f"{data.get('cpu_temp', 0):.1f} °C")
     table.add_row("Case Temp", f"{data.get('case_temp', 0):.1f} °C")
     table.add_row("IP Address", data.get("ip_address", "n/a"))

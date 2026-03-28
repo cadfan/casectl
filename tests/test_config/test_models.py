@@ -217,6 +217,9 @@ class TestSystemMetricsDefaults:
             "weekday",
             "time",
             "rpi_fan_duty",
+            "swap_percent",
+            "swap_used_gb",
+            "swap_total_gb",
         }
         assert fields == expected
 

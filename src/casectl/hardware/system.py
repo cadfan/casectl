@@ -47,6 +47,15 @@ class DiskInfo:
 
 
 @dataclass(frozen=True, slots=True)
+class SwapInfo:
+    """Swap usage snapshot."""
+
+    percent: float
+    used_gb: float
+    total_gb: float
+
+
+@dataclass(frozen=True, slots=True)
 class AllMetrics:
     """Aggregated snapshot of all system metrics."""
 
@@ -54,6 +63,7 @@ class AllMetrics:
     cpu_temperature: float
     memory: MemoryInfo
     disk: DiskInfo
+    swap: SwapInfo
     ip_address: str
     fan_duty: int
     date: str
@@ -113,6 +123,19 @@ class SystemInfo:
         except Exception:
             logger.debug("Failed to read memory usage", exc_info=True)
             return MemoryInfo(percent=0.0, used_gb=0.0, total_gb=0.0)
+
+    def get_swap_usage(self) -> SwapInfo:
+        """Return current swap usage."""
+        try:
+            swap = psutil.swap_memory()
+            return SwapInfo(
+                percent=swap.percent,
+                used_gb=round(swap.used / (1024**3), 2),
+                total_gb=round(swap.total / (1024**3), 2),
+            )
+        except Exception:
+            logger.debug("Failed to read swap usage", exc_info=True)
+            return SwapInfo(percent=0.0, used_gb=0.0, total_gb=0.0)
 
     def get_disk_usage(self) -> DiskInfo:
         """Return root filesystem disk usage."""
@@ -223,6 +246,7 @@ class SystemInfo:
             cpu_temperature=self.get_cpu_temperature(),
             memory=self.get_memory_usage(),
             disk=self.get_disk_usage(),
+            swap=self.get_swap_usage(),
             ip_address=self.get_ip_address(),
             fan_duty=self.get_fan_duty(),
             date=self.get_date(),

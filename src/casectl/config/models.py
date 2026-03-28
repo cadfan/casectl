@@ -559,3 +559,6 @@ class SystemMetrics(BaseModel):
         default=0,
         description="Raspberry Pi's own fan PWM duty (0-255)",
     )
+    swap_percent: float = Field(default=0.0, description="Swap utilisation (0-100)")
+    swap_used_gb: float = Field(default=0.0, description="Swap used (GB)")
+    swap_total_gb: float = Field(default=0.0, description="Swap total (GB)")

@@ -110,7 +110,7 @@ class TestPluginSetup:
     @pytest.mark.asyncio
     async def test_get_status_after_metrics(self):
         """After collecting metrics, status should report them."""
-        from casectl.hardware.system import AllMetrics, MemoryInfo, DiskInfo
+        from casectl.hardware.system import AllMetrics, MemoryInfo, DiskInfo, SwapInfo
 
         all_metrics = AllMetrics(
             cpu_usage=25.0, cpu_temperature=52.3,
@@ -118,6 +118,7 @@ class TestPluginSetup:
             disk=DiskInfo(percent=67.0, used_gb=20.0, total_gb=30.0),
             ip_address="192.168.0.238", fan_duty=128,
             date="2026-03-25", weekday="Wednesday", time="14:30:00",
+            swap=SwapInfo(percent=10.0, used_gb=0.4, total_gb=4.0),
         )
 
         expansion = _make_mock_expansion()
@@ -155,7 +156,7 @@ class TestCollectMetrics:
     @pytest.mark.asyncio
     async def test_collect_metrics_emits_event(self):
         """The collect loop should emit a metrics_updated event."""
-        from casectl.hardware.system import AllMetrics, MemoryInfo, DiskInfo
+        from casectl.hardware.system import AllMetrics, MemoryInfo, DiskInfo, SwapInfo
 
         all_metrics = AllMetrics(
             cpu_usage=25.0, cpu_temperature=52.3,
@@ -163,6 +164,7 @@ class TestCollectMetrics:
             disk=DiskInfo(percent=67.0, used_gb=20.0, total_gb=30.0),
             ip_address="192.168.0.238", fan_duty=128,
             date="2026-03-25", weekday="Wednesday", time="14:30:00",
+            swap=SwapInfo(percent=10.0, used_gb=0.4, total_gb=4.0),
         )
 
         expansion = _make_mock_expansion()
@@ -191,7 +193,7 @@ class TestCollectMetrics:
     @pytest.mark.asyncio
     async def test_collect_metrics_reads_expansion_board(self):
         """_collect_metrics should read temperature, fan duty, and motor speed."""
-        from casectl.hardware.system import AllMetrics, MemoryInfo, DiskInfo
+        from casectl.hardware.system import AllMetrics, MemoryInfo, DiskInfo, SwapInfo
 
         all_metrics = AllMetrics(
             cpu_usage=25.0, cpu_temperature=52.3,
@@ -199,6 +201,7 @@ class TestCollectMetrics:
             disk=DiskInfo(percent=67.0, used_gb=20.0, total_gb=30.0),
             ip_address="192.168.0.238", fan_duty=128,
             date="2026-03-25", weekday="Wednesday", time="14:30:00",
+            swap=SwapInfo(percent=10.0, used_gb=0.4, total_gb=4.0),
         )
 
         expansion = _make_mock_expansion()
