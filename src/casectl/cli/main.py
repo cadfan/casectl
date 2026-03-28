@@ -633,7 +633,7 @@ def doctor() -> None:
         )
 
     # 7. CPU temp sysfs readable
-    cpu_temp_path = "/sys/class/thermal/thermal_zone0/temp"
+    cpu_temp_path = "/sys/devices/virtual/thermal/thermal_zone0/temp"
     try:
         with open(cpu_temp_path) as f:
             raw = f.read().strip()

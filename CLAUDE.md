@@ -1,6 +1,6 @@
 # casectl
 
-Headless-first multi-interface controller for Freenove FNK0107B Raspberry Pi case.
+Headless-first multi-interface controller for Freenove Computer Case Kit Pro (FNK0107 series) for Raspberry Pi.
 
 ## Architecture
 

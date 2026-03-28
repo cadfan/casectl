@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "casectl"
 version = "0.1.0"
-description = "Headless-first multi-interface controller for Freenove FNK0107B Raspberry Pi case"
+description = "Headless-first multi-interface controller for Freenove Computer Case Kit Pro (FNK0107 series) for Raspberry Pi"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
@@ -34,7 +34,6 @@ dependencies = [
     "jinja2>=3.1",
     "pydantic>=2.5",
     "psutil>=5.9",
-    "pyyaml>=6.0",
     "ruamel.yaml>=0.18",
     "httpx>=0.27",
 ]

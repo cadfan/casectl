@@ -500,7 +500,7 @@ class OledDisplayPlugin:
     # How often the display re-renders (seconds).  Keeps the clock
     # seconds ticking and metric values fresh while staying on the
     # same screen.
-    _RENDER_INTERVAL: float = 1.0
+    _RENDER_INTERVAL: float = 0.5
 
     async def _display_loop(self) -> None:
         """Cycle through enabled screens, re-rendering every second.

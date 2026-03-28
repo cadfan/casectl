@@ -1,6 +1,8 @@
 # casectl
 
-Headless-first multi-interface controller for the Freenove FNK0107B Raspberry Pi case.
+Headless-first multi-interface controller for the Freenove Computer Case Kit Pro (FNK0107 series) for Raspberry Pi.
+
+**Documentation:** https://casectl.griffiths.cymru/
 
 ## Features
 
@@ -18,7 +20,8 @@ Headless-first multi-interface controller for the Freenove FNK0107B Raspberry Pi
 ## Quick Start
 
 ```bash
-pip install casectl[hardware]
+git clone https://github.com/cadfan/casectl.git && cd casectl
+pip install -e ".[hardware]"
 casectl doctor        # Check hardware and dependencies
 casectl serve         # Start daemon + web dashboard
 # Open http://localhost:8420 in your browser
@@ -32,12 +35,12 @@ casectl
 
 # Fan control
 casectl fan status
-casectl fan mode 0              # 0=follow_temp 1=follow_rpi 2=manual 3=custom 4=off
+casectl fan mode follow-temp    # or: follow-rpi, manual, custom, off
 casectl fan speed 0 80          # Set channel 0 to 80% duty
 
 # LED control
 casectl led status
-casectl led mode 0              # 0=rainbow 1=breathing 2=follow_temp 3=manual 4=custom 5=off
+casectl led mode rainbow        # or: breathing, follow-temp, manual, custom, off
 casectl led color 255 0 128     # Set RGB colour (switches to manual mode)
 
 # OLED display
@@ -49,7 +52,13 @@ casectl monitor
 
 # Configuration
 casectl config get fan
-casectl config set fan mode follow_temp
+casectl config set fan mode 0   # Config stores integer enum values
+
+# Diagnostics
+casectl doctor                  # Check hardware, I2C, dependencies
+
+# API token management
+casectl token                   # Show current API token
 
 # Daemon management
 casectl serve --bind 0.0.0.0 --port 8420 --log-level debug
@@ -70,7 +79,7 @@ casectl service uninstall
     ┌─────────────────────────────────────────────────────────┐
     │                                                         │
     │  ┌──────────┐  ┌────────────┐  ┌───────────────────┐   │
-    │  │   CLI    │  │  Web UI    │  │  WebSocket /ws    │   │
+    │  │   CLI    │  │  Web UI    │  │  WebSocket        │   │
     │  │  (Click) │  │  (FastAPI) │  │  (real-time)      │   │
     │  └────┬─────┘  └─────┬──────┘  └────────┬──────────┘   │
     │       │              │                   │              │
@@ -125,6 +134,7 @@ The daemon serves a REST API on port 8420 (default).
 | `/api/health`                           | GET    | Daemon health, uptime, plugins  |
 | `/api/plugins`                          | GET    | List all loaded plugins         |
 | `/api/config/{section}`                 | GET    | Read config section             |
+| `/api/config`                           | PATCH  | Update config section           |
 | `/api/ws`                               | WS     | Real-time event stream          |
 | `/api/plugins/fan-control/status`       | GET    | Fan status, mode, duty, RPM     |
 | `/api/plugins/fan-control/mode`         | POST   | Set fan mode                    |
@@ -134,6 +144,7 @@ The daemon serves a REST API on port 8420 (default).
 | `/api/plugins/led-control/color`        | POST   | Set RGB colour                  |
 | `/api/plugins/oled-display/status`      | GET    | OLED screen info                |
 | `/api/plugins/oled-display/screen`      | POST   | Enable/disable screens          |
+| `/api/plugins/oled-display/rotation`    | POST   | Set display rotation (0 or 180) |
 | `/api/plugins/system-monitor/status`    | GET    | System metrics snapshot         |
 | `/api/plugins/prometheus/metrics`       | GET    | Prometheus text format          |
 
@@ -175,7 +186,7 @@ Configuration is read at startup and can be queried/modified via the API.
 This project targets a specific hardware setup:
 
 - **Raspberry Pi 5B** (also works on Pi 4B)
-- **Freenove FNK0107B case** with STM32-based expansion board
+- **Freenove Computer Case Kit Pro (FNK0107 series)** with STM32-based expansion board
 - **STM32 expansion board** at I2C address `0x21` -- drives 3 PWM fans, 4 RGB LEDs, and a temperature sensor
 - **SSD1306 OLED display** at I2C address `0x3C` -- 128x64 pixels
 
@@ -194,11 +205,20 @@ casectl degrades gracefully.  Without the expansion board or OLED, those
 plugins report as degraded but the daemon, API, and monitoring still work.
 This is useful for development on a regular Linux machine.
 
+## Troubleshooting
+
+**Cannot connect to daemon:** Run `casectl serve` first, or `casectl service install` for auto-start.
+
+**I2C not detected:** Enable I2C with `sudo raspi-config nonint do_i2c 0` and reboot.
+
+**Permission denied on I2C:** `sudo usermod -aG i2c $USER` then log out and back in.
+
+**Expansion board not responding:** Check the ribbon cable. Run `casectl doctor` for diagnostics.
+
 ## Development
 
 ```bash
-git clone <repo-url> casectl
-cd casectl
+git clone https://github.com/cadfan/casectl.git && cd casectl
 pip install -e ".[all]"
 pytest
 ruff check src/
