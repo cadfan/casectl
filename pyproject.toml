@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "casectl"
-version = "0.1.0"
+version = "0.2.0"
 description = "Headless-first multi-interface controller for Freenove Computer Case Kit Pro (FNK0107 series) for Raspberry Pi"
 readme = "README.md"
 license = "MIT"

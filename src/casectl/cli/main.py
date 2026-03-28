@@ -388,7 +388,7 @@ def led_color(ctx: click.Context, values: tuple[str, ...]) -> None:
     \b
     Accepts three formats:
       casectl led color red              # named colour
-      casectl led color #FF0080          # hex code
+      casectl led color '#FF0080'        # hex code (quote the #)
       casectl led color 255 0 128        # R G B values (0-255 each)
 
     \b
@@ -474,7 +474,7 @@ def oled_screen(ctx: click.Context, index: int, enable: bool) -> None:
 
     Example: casectl oled screen 0 --enable
     """
-    data = _api_post(
+    data = _api_put(
         ctx,
         "/api/plugins/oled-display/screen",
         {"index": index, "enabled": enable},
@@ -488,7 +488,7 @@ def oled_screen(ctx: click.Context, index: int, enable: bool) -> None:
 @click.pass_context
 def oled_rotation(ctx: click.Context, degrees: str) -> None:
     """Set OLED display rotation (0 or 180 degrees)."""
-    data = _api_post(
+    data = _api_put(
         ctx,
         "/api/plugins/oled-display/rotation",
         {"rotation": int(degrees)},
@@ -543,7 +543,7 @@ def config(ctx: click.Context) -> None:
 @click.argument("section")
 @click.pass_context
 def config_get(ctx: click.Context, section: str) -> None:
-    """Get a configuration section (e.g. fan, led, oled, service)."""
+    """Get a configuration section (e.g. fan, led, oled, service, alerts, mqtt, automation)."""
     data = _api_get(ctx, f"/api/config/{section}")
 
     table = Table(

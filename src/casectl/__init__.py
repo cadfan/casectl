@@ -1,3 +1,3 @@
-"""casectl — Headless-first multi-interface controller for Freenove FNK0107B."""
+"""casectl — Headless-first multi-interface controller for Freenove Computer Case Kit Pro (FNK0107 series)."""
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

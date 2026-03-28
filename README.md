@@ -7,13 +7,18 @@ Headless-first multi-interface controller for the Freenove Computer Case Kit Pro
 ## Features
 
 - **CLI, Web dashboard, and TUI interfaces** -- one daemon, multiple ways to interact
-- **Plugin architecture** -- every feature (fan, LED, OLED, monitor) is a plugin
-- **Fan control** with temperature-based auto mode, RPi fan-follow, manual, and off
-- **RGB LED control** with rainbow, breathing, follow-temp, and manual colour modes
+- **Interactive web dashboard** with mode dropdowns, colour picker, fan sliders, and OLED toggles
+- **`casectl top`** -- live-updating terminal dashboard with interactive fan control
+- **Plugin architecture** -- every feature is a plugin (8 built-in)
+- **Fan control** with temperature-based auto mode, RPi fan-follow, manual, custom curves, and off
+- **RGB LED control** with rainbow, breathing, follow-temp, and manual colour modes (16 named colours + hex)
 - **OLED display** with 4 cycling info screens (128x64 SSD1306)
+- **MQTT integration** with Home Assistant auto-discovery
+- **Automation engine** -- event-driven rules with conditions, actions, and priority
+- **Alerting** via webhook, ntfy.sh, and SMTP
 - **System monitoring** with CPU, memory, disk, temperature, and fan speed metrics
 - **Prometheus metrics endpoint** for Grafana dashboards
-- **WebSocket real-time events** for live dashboards
+- **Real-time updates** via WebSocket (bidirectional) and Server-Sent Events
 - **Systemd service** with timer-based auto-start
 - **Zero-config defaults** -- works out of the box
 
@@ -55,6 +60,10 @@ casectl monitor
 # Configuration
 casectl config get fan
 casectl config set fan mode 0   # Config stores integer enum values
+
+# Interactive terminal dashboard
+casectl top                     # Live-updating TUI (keys: m=mode, +/-=speed, q=quit)
+casectl top --once              # Single snapshot for scripts
 
 # Diagnostics
 casectl doctor                  # Check hardware, I2C, dependencies
@@ -103,6 +112,10 @@ casectl service uninstall
     │  │ Fan ││ LED ││OLED ││Mon- ││Prometheus │            │
     │  │Ctrl ││Ctrl ││Disp ││itor ││  /metrics │            │
     │  └──┬──┘└──┬──┘└──┬──┘└──┬──┘└───────────┘            │
+    │  ┌──▼──┐┌──▼──────▼──┐┌──▼──────────────┐             │
+    │  │MQTT ││ Automation ││   Alerting      │             │
+    │  │(HA) ││  (rules)   ││(webhook/ntfy/…) │             │
+    │  └──┬──┘└────────────┘└─────────────────┘             │
     │     │      │      │      │                              │
     │  ┌──▼──────▼──────▼──────▼──────────────────────────┐  │
     │  │              Event Bus                            │  │
@@ -139,16 +152,22 @@ The daemon serves a REST API on port 8420 (default).
 | `/api/config`                           | PATCH  | Update config section           |
 | `/api/ws`                               | WS     | Real-time event stream          |
 | `/api/plugins/fan-control/status`       | GET    | Fan status, mode, duty, RPM     |
-| `/api/plugins/fan-control/mode`         | POST   | Set fan mode                    |
-| `/api/plugins/fan-control/speed`        | POST   | Set fan duty per channel        |
+| `/api/plugins/fan-control/mode`         | PUT    | Set fan mode                    |
+| `/api/plugins/fan-control/speed`        | PUT    | Set fan duty per channel        |
 | `/api/plugins/led-control/status`       | GET    | LED mode, current colour        |
-| `/api/plugins/led-control/mode`         | POST   | Set LED mode                    |
-| `/api/plugins/led-control/color`        | POST   | Set RGB colour                  |
+| `/api/plugins/led-control/mode`         | PUT    | Set LED mode                    |
+| `/api/plugins/led-control/color`        | PUT    | Set RGB colour                  |
 | `/api/plugins/oled-display/status`      | GET    | OLED screen info                |
-| `/api/plugins/oled-display/screen`      | POST   | Enable/disable screens          |
-| `/api/plugins/oled-display/rotation`    | POST   | Set display rotation (0 or 180) |
+| `/api/plugins/oled-display/screen`      | PUT    | Enable/disable screens          |
+| `/api/plugins/oled-display/rotation`    | PUT    | Set display rotation (0 or 180) |
+| `/api/plugins/oled-display/power`       | PUT    | Enable/disable OLED display     |
+| `/api/plugins/oled-display/content`     | PUT    | Per-screen display settings     |
 | `/api/plugins/system-monitor/status`    | GET    | System metrics snapshot         |
 | `/api/plugins/prometheus/metrics`       | GET    | Prometheus text format          |
+| `/api/plugins/mqtt/status`              | GET    | MQTT connection status          |
+| `/api/plugins/automation/status`        | GET    | Automation engine status        |
+| `/api/plugins/alerting/status`          | GET    | Alerting channel status         |
+| `/api/sse`                              | GET    | Server-Sent Events stream       |
 
 ## Plugin Development
 
