@@ -190,6 +190,7 @@ async def _shutdown(
     plugin_host: PluginHost,
     expansion: ExpansionBoard | None,
     oled: OledDevice | None,
+    lock_file: IO[str] | None = None,
 ) -> None:
     """Perform an orderly shutdown of all daemon components.
 
@@ -233,7 +234,15 @@ async def _shutdown(
         except Exception:
             logger.error("Error closing OLED device", exc_info=True)
 
-    # 3. Tell Uvicorn to exit
+    # 3. Release PID lock
+    if lock_file is not None:
+        try:
+            lock_file.close()
+            _LOCK_PATH.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+    # 4. Tell Uvicorn to exit
     server.should_exit = True
     logger.info("casectl daemon shutdown complete")
 
@@ -400,7 +409,7 @@ async def run_daemon(
             sys.exit(1)
         shutdown_triggered = True
         asyncio.ensure_future(
-            _shutdown(server, plugin_host, expansion, oled),
+            _shutdown(server, plugin_host, expansion, oled, lock_file),
             loop=loop,
         )
 
@@ -419,6 +428,6 @@ async def run_daemon(
     finally:
         # Ensure cleanup even if serve() raises without a signal.
         if not shutdown_triggered:
-            await _shutdown(server, plugin_host, expansion, oled)
+            await _shutdown(server, plugin_host, expansion, oled, lock_file)
 
     logger.info("casectl daemon exited")
