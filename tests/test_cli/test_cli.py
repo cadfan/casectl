@@ -242,11 +242,11 @@ class TestLedCommands:
         assert "LED Status" in result.output
 
     def test_led_mode_command(self) -> None:
-        mock_client = _mock_api_get({"mode": 3})
+        mock_client = _mock_api_get({"mode": "manual"})
 
         runner = _runner()
         with patch("casectl.cli.main.httpx.Client", return_value=mock_client):
-            result = runner.invoke(cli, ["led", "mode", "3"])
+            result = runner.invoke(cli, ["led", "mode", "manual"])
 
         assert result.exit_code == 0
         assert "LED mode set to" in result.output
@@ -264,7 +264,7 @@ class TestLedCommands:
     def test_led_color_out_of_range(self) -> None:
         runner = _runner()
         result = runner.invoke(cli, ["led", "color", "256", "0", "0"])
-        assert result.exit_code == 1
+        assert result.exit_code == 2  # Click UsageError for IntRange violation
 
 
 # ---------------------------------------------------------------------------

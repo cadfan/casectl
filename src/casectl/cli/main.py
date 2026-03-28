@@ -97,7 +97,11 @@ def _api_patch(ctx: click.Context, path: str, json: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 
-@click.group(invoke_without_command=True)
+CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
+
+
+@click.group(invoke_without_command=True, context_settings=CONTEXT_SETTINGS)
+@click.version_option(package_name="casectl")
 @click.option(
     "--host",
     default=_DEFAULT_HOST,
@@ -107,7 +111,7 @@ def _api_patch(ctx: click.Context, path: str, json: dict) -> dict:
 )
 @click.pass_context
 def cli(ctx: click.Context, host: str) -> None:
-    """casectl — headless controller for Freenove FNK0107B case hardware."""
+    """casectl — headless controller for Freenove Computer Case Kit Pro (FNK0107 series)."""
     ctx.ensure_object(dict)
     ctx.obj["host"] = host.rstrip("/")
 
@@ -184,7 +188,7 @@ def fan_status(ctx: click.Context) -> None:
     degraded = data.get("degraded", False)
 
     table.add_row("Mode", mode)
-    table.add_row("CPU Temp", f"{data.get('temp', 0):.1f} C")
+    table.add_row("CPU Temp", f"{data.get('temp', 0):.1f} °C")
     table.add_row(
         "Health",
         "[red]DEGRADED[/red]" if degraded else "[green]OK[/green]",
@@ -206,36 +210,37 @@ _FAN_MODE_NAMES: dict[str, int] = {
 
 
 @fan.command("mode")
-@click.argument("mode", type=str)
+@click.argument("mode", type=click.Choice(list(_FAN_MODE_NAMES.keys()), case_sensitive=False))
 @click.pass_context
 def fan_mode(ctx: click.Context, mode: str) -> None:
-    """Set fan mode (follow-temp, follow-rpi, manual, custom, off)."""
-    mode_int = _FAN_MODE_NAMES.get(mode.lower())
-    if mode_int is None:
-        try:
-            mode_int = int(mode)
-        except ValueError:
-            console.print(f"[red]Unknown mode:[/red] {mode}")
-            console.print(f"Valid modes: {', '.join(_FAN_MODE_NAMES)}")
-            raise SystemExit(1)
+    """Set fan operating mode.
+
+    \b
+    Modes:
+      follow-temp  Automatic PWM based on CPU temperature curve
+      follow-rpi   Mirror the Raspberry Pi's own fan PWM signal
+      manual       Fixed duty cycle (set speed with 'fan speed')
+      custom       Reserved for plugin-defined curves
+      off          Fans disabled
+    """
+    mode_int = _FAN_MODE_NAMES[mode.lower()]
     data = _api_post(ctx, "/api/plugins/fan-control/mode", {"mode": mode_int})
     console.print(f"[green]Fan mode set to:[/green] {data.get('mode', mode)}")
 
 
 @fan.command("speed")
-@click.argument("channel", type=int)
-@click.argument("duty", type=int)
+@click.argument("channel", type=click.IntRange(0, 2))
+@click.argument("duty", type=click.IntRange(0, 100))
 @click.pass_context
 def fan_speed(ctx: click.Context, channel: int, duty: int) -> None:
-    """Set fan speed for a channel (duty 0-100).
+    """Set fan speed for a specific fan (switches to manual mode).
 
-    Sets the specified channel's duty cycle. Other channels are padded
-    from the last provided value by the API.
+    \b
+    CHANNEL  Fan number (0, 1, or 2)
+    DUTY     Speed percentage (0-100)
+
+    Example: casectl fan speed 0 75
     """
-    if not 0 <= duty <= 100:
-        err_console.print("[bold red]Duty must be 0-100.[/]")
-        raise SystemExit(1)
-
     # Build a duty list with the correct channel set.
     duty_list = [0] * (channel + 1)
     duty_list[channel] = duty
@@ -287,34 +292,35 @@ _LED_MODE_NAMES: dict[str, int] = {
 
 
 @led.command("mode")
-@click.argument("mode", type=str)
+@click.argument("mode", type=click.Choice(list(_LED_MODE_NAMES.keys()), case_sensitive=False))
 @click.pass_context
 def led_mode(ctx: click.Context, mode: str) -> None:
-    """Set LED mode (rainbow, breathing, follow-temp, manual, custom, off)."""
-    mode_int = _LED_MODE_NAMES.get(mode.lower())
-    if mode_int is None:
-        try:
-            mode_int = int(mode)
-        except ValueError:
-            console.print(f"[red]Unknown mode:[/red] {mode}")
-            console.print(f"Valid modes: {', '.join(_LED_MODE_NAMES)}")
-            raise SystemExit(1)
+    """Set LED operating mode.
+
+    \b
+    Modes:
+      rainbow      Automatic colour cycling (STM32 firmware)
+      breathing    Pulsing brightness effect (STM32 firmware)
+      follow-temp  Colour follows CPU temperature (cool=blue, hot=red)
+      manual       Fixed colour (set with 'led color')
+      custom       Reserved for plugin-defined effects
+      off          LEDs disabled
+    """
+    mode_int = _LED_MODE_NAMES[mode.lower()]
     data = _api_post(ctx, "/api/plugins/led-control/mode", {"mode": mode_int})
     console.print(f"[green]LED mode set to:[/green] {data.get('mode', mode)}")
 
 
 @led.command("color")
-@click.argument("r", type=int)
-@click.argument("g", type=int)
-@click.argument("b", type=int)
+@click.argument("r", type=click.IntRange(0, 255))
+@click.argument("g", type=click.IntRange(0, 255))
+@click.argument("b", type=click.IntRange(0, 255))
 @click.pass_context
 def led_color(ctx: click.Context, r: int, g: int, b: int) -> None:
-    """Set LED colour (R G B, each 0-255). Switches to manual mode."""
-    for name, val in [("R", r), ("G", g), ("B", b)]:
-        if not 0 <= val <= 255:
-            err_console.print(f"[bold red]{name} must be 0-255, got {val}.[/]")
-            raise SystemExit(1)
+    """Set LED colour (R G B, each 0-255). Switches to manual mode.
 
+    Example: casectl led color 255 0 128
+    """
     data = _api_post(ctx, "/api/plugins/led-control/color", {"red": r, "green": g, "blue": b})
     color = data.get("color", {})
     console.print(
@@ -364,11 +370,17 @@ def oled_status(ctx: click.Context) -> None:
 
 
 @oled.command("screen")
-@click.argument("index", type=int)
+@click.argument("index", type=click.IntRange(0, 3))
 @click.option("--enable/--disable", required=True, help="Enable or disable the screen.")
 @click.pass_context
 def oled_screen(ctx: click.Context, index: int, enable: bool) -> None:
-    """Enable or disable an OLED screen by index."""
+    """Enable or disable an OLED screen by index (0-3).
+
+    \b
+    Screens: 0=clock, 1=metrics, 2=temperature, 3=fan_duty
+
+    Example: casectl oled screen 0 --enable
+    """
     data = _api_post(
         ctx,
         "/api/plugins/oled-display/screen",
@@ -376,6 +388,19 @@ def oled_screen(ctx: click.Context, index: int, enable: bool) -> None:
     )
     action = "enabled" if data.get("enabled", enable) else "disabled"
     console.print(f"[green]Screen {data.get('index', index)} {action}.[/green]")
+
+
+@oled.command("rotation")
+@click.argument("degrees", type=click.Choice(["0", "180"]))
+@click.pass_context
+def oled_rotation(ctx: click.Context, degrees: str) -> None:
+    """Set OLED display rotation (0 or 180 degrees)."""
+    data = _api_post(
+        ctx,
+        "/api/plugins/oled-display/rotation",
+        {"rotation": int(degrees)},
+    )
+    console.print(f"[green]OLED rotation set to:[/green] {data.get('rotation', degrees)}°")
 
 
 # ===================================================================
@@ -396,8 +421,8 @@ def monitor(ctx: click.Context) -> None:
     table.add_row("CPU Usage", f"{data.get('cpu_percent', 0):.1f}%")
     table.add_row("Memory Usage", f"{data.get('memory_percent', 0):.1f}%")
     table.add_row("Disk Usage", f"{data.get('disk_percent', 0):.1f}%")
-    table.add_row("CPU Temp", f"{data.get('cpu_temp', 0):.1f} C")
-    table.add_row("Case Temp", f"{data.get('case_temp', 0):.1f} C")
+    table.add_row("CPU Temp", f"{data.get('cpu_temp', 0):.1f} °C")
+    table.add_row("Case Temp", f"{data.get('case_temp', 0):.1f} °C")
     table.add_row("IP Address", data.get("ip_address", "n/a"))
 
     fan_duty = data.get("fan_duty", [])
@@ -474,7 +499,7 @@ def config_set(ctx: click.Context, section: str, key: str, value: str) -> None:
 @cli.command("serve")
 @click.option("--bind", default=None, help="Bind address (default from config).")
 @click.option("--port", default=None, type=int, help="Bind port (default from config).")
-@click.option("--log-level", default="info", help="Logging level.")
+@click.option("--log-level", default="info", type=click.Choice(["debug", "info", "warning", "error", "critical"], case_sensitive=False), show_default=True, help="Logging level.")
 def serve(bind: str | None, port: int | None, log_level: str) -> None:
     """Start the casectl daemon."""
     import asyncio
@@ -613,7 +638,7 @@ def doctor() -> None:
         with open(cpu_temp_path) as f:
             raw = f.read().strip()
             temp_c = int(raw) / 1000.0
-        _pass("CPU temp sysfs readable", f"{temp_c:.1f} C")
+        _pass("CPU temp sysfs readable", f"{temp_c:.1f} °C")
     except FileNotFoundError:
         _fail("CPU temp sysfs readable", f"{cpu_temp_path} not found.")
     except (ValueError, OSError) as exc:
